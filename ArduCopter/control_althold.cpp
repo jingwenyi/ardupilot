@@ -155,8 +155,10 @@ void Copter::althold_run()
         // call attitude controller
         attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(target_roll, target_pitch, target_yaw_rate, get_smoothing_gain());
 
+	const Vector3f &velocity = inertial_nav.get_velocity();
+        float velocity_level = sqrt(velocity.x*velocity.x + velocity.y*velocity.y);
         // adjust climb rate using rangefinder
-        if (rangefinder_alt_ok()) {
+        if (rangefinder_alt_ok() && fabs(velocity_level) > 50.0f) {
             // if rangefinder is ok, use surface tracking
             target_climb_rate = get_surface_tracking_climb_rate(target_climb_rate, pos_control->get_alt_target(), G_Dt);
         }

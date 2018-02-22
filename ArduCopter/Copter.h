@@ -174,7 +174,7 @@ private:
 	enum AB_stauts ab_staus_a;
 	enum AB_stauts ab_staus_b;
 	enum AB_bear ab_bear_expect;
- 
+
     // key aircraft parameters passed to multiple libraries
     AP_Vehicle::MultiCopter aparm;
 

@@ -27,6 +27,8 @@
 #include "AP_RangeFinder_LeddarOne.h"
 #include "AP_RangeFinder_uLanding.h"
 #include "AP_RangeFinder_trone.h"
+#include "AP_RangeFinder_nra24.h"
+
 #include <AP_BoardConfig/AP_BoardConfig.h>
 
 extern const AP_HAL::HAL &hal;
@@ -702,6 +704,12 @@ void RangeFinder::detect_instance(uint8_t instance)
         if (AP_RangeFinder_analog::detect(*this, instance)) {
             state[instance].instance = instance;
             drivers[instance] = new AP_RangeFinder_analog(*this, instance, state[instance]);
+        }
+        break;
+    case RangeFinder_TYPE_NRA24:
+         if (AP_RangeFinder_nra24::detect(*this, instance, serial_manager)) {
+            state[instance].instance = instance;
+            drivers[instance] = new AP_RangeFinder_nra24(*this, instance, state[instance], serial_manager);
         }
         break;
     default:

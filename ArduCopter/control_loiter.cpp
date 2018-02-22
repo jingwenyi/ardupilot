@@ -81,9 +81,22 @@ void Copter::loiter_run()
     if (!failsafe.radio) {
         // apply SIMPLE mode transform to pilot inputs
         update_simple_mode();
-
-        // process pilot's roll and pitch input
-        wp_nav->set_pilot_desired_acceleration(channel_roll->get_control_in(), channel_pitch->get_control_in());
+        //ab point code
+        if(((ab_staus_a == AB_A_SET) && (ab_staus_b == AB_B_SET)) || (ab_bear_expect != AB_NONE_BEAR)){
+           if(ab_bear_expect == AB_NONE_BEAR){
+                if(hal.rcin->read(CH_1) < 1150){
+                    ab_bear_expect = AB_LEFT; //-90
+                    gcs_send_text_fmt(MAV_SEVERITY_CRITICAL,"AB bearing set");
+                }else if(hal.rcin->read(CH_1) > 1850){
+                    ab_bear_expect = AB_RIGHT; //+90
+                    gcs_send_text_fmt(MAV_SEVERITY_CRITICAL,"AB bearing set");
+                }
+           }
+           wp_nav->set_pilot_desired_acceleration(0, 0);
+        }else{
+            // process pilot's roll and pitch input
+            wp_nav->set_pilot_desired_acceleration(channel_roll->get_control_in(), channel_pitch->get_control_in());
+        }
 
         // get pilot's desired yaw rate
         target_yaw_rate = get_pilot_desired_yaw_rate(channel_yaw->get_control_in());
@@ -215,5 +228,40 @@ void Copter::loiter_run()
         pos_control->set_alt_target_from_climb_rate_ff(target_climb_rate, G_Dt, false);
         pos_control->update_z_controller();
         break;
+    }
+
+    static bool gcs_flag1 = false;
+    static bool gcs_flag2 = false;
+    uint16_t c8in = hal.rcin->read(CH_8);
+    if((c8in < 1300 || c8in > 1700) && ap.auto_armed && (ab_bear_expect == AB_NONE_BEAR)){
+        if(c8in < 1300){
+            gcs_flag2 = false;
+            Location temp_loc;
+            if (inertial_nav.get_location(temp_loc)) {
+                if(!gcs_flag1){
+                    ab_staus_a = AB_A_SET;
+                    ab_staus_b = AB_NONE;
+                    loc_a.lat = temp_loc.lat;
+                    loc_a.lng = temp_loc.lng;
+                    gcs_flag1 = true;
+                    gcs_send_text_fmt(MAV_SEVERITY_CRITICAL,"AB set A point");
+                }
+            }
+        }else if(c8in > 1700) {
+            gcs_flag1 = false;
+            Location temp_loc;
+            if (inertial_nav.get_location(temp_loc)) {
+                if(!gcs_flag2 && (ab_staus_a == AB_A_SET) && (get_distance_cm(loc_a, temp_loc) > 500)){
+                    ab_staus_b = AB_B_SET;
+                    loc_b.lat = temp_loc.lat;
+                    loc_b.lng = temp_loc.lng;
+                    gcs_flag2 = true;
+                    gcs_send_text_fmt(MAV_SEVERITY_CRITICAL,"AB set B point");
+                }
+            }
+        }
+    } else {
+        gcs_flag1 = false;
+        gcs_flag2 = false;
     }
 }

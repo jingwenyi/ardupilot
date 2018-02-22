@@ -157,6 +157,7 @@ const AP_Scheduler::Task Copter::scheduler_tasks[] = {
 #endif
     SCHED_TASK(button_update,          5,    100),
     SCHED_TASK(stats_update,           1,    100),
+    SCHED_TASK(ab_create_line,		   10,	 200),
 };
 
 
@@ -301,6 +302,111 @@ void Copter::fast_loop()
         Log_Sensor_Health();
     }
 }
+
+//
+// ab point
+//
+void Copter::ab_create_line()
+{
+    if(ab_bear_expect != AB_NONE_BEAR){
+        AP_Mission::Mission_Command cmd;
+        if(create_line_cnt == 0){
+            //calculate bearing
+            ab_bearing = get_bearing_cd(loc_a, loc_b) * 0.01;
+            if(ab_bear_expect == AB_RIGHT){
+                ab_bearing += 90;
+            }else if(ab_bear_expect == AB_LEFT){
+                ab_bearing -= 90;
+            }
+            mission.clear();
+
+            // add home cmd
+            cmd.id = MAV_CMD_NAV_WAYPOINT;
+            cmd.content.location.options = 0;
+            cmd.p1 = 0;
+            cmd.content.location.alt = 0;
+            cmd.content.location.lat = 0;
+            cmd.content.location.lng = 0;
+            cmd.content.location.flags.relative_alt = 1;
+            if(g.k_param_ab_point_mode == 1){
+                cmd.content.location.flags.terrain_alt = 1;
+            }
+            mission.add_cmd(cmd);
+
+            #if 0
+
+            // add takeoff cmd
+            cmd.id = MAV_CMD_NAV_TAKEOFF;
+            cmd.p1 = 2;
+            cmd.content.location.alt = g.ab_height;
+            cmd.content.location.flags.relative_alt = 1;
+            if(g.k_param_ab_point_mode == 1){
+                cmd.content.location.flags.terrain_alt = 1;
+            }
+            mission.add_cmd(cmd);
+
+            #endif
+
+            create_line_cnt++;
+        }
+        cmd.id = MAV_CMD_NAV_WAYPOINT;
+        cmd.content.location.options = 0;
+        cmd.p1 = 0;
+        cmd.content.location.alt = g.ab_height;
+        cmd.content.location.flags.relative_alt = 1;
+        if(g.k_param_ab_point_mode == 1){
+            cmd.content.location.flags.terrain_alt = 1;
+        }
+        new_coord_from_bearing_and_distance(loc_b,ab_bearing,create_line_cnt*(g.ab_width/100),cmd.content.location);
+        mission.add_cmd(cmd);
+
+        cmd.id = MAV_CMD_NAV_WAYPOINT;
+        cmd.content.location.options = 0;
+        cmd.p1 = 0;
+        cmd.content.location.alt = g.ab_height;
+        cmd.content.location.flags.relative_alt = 1;
+        if(g.k_param_ab_point_mode == 1){
+            cmd.content.location.flags.terrain_alt = 1;
+        }
+        new_coord_from_bearing_and_distance(loc_a,ab_bearing,create_line_cnt*(g.ab_width/100),cmd.content.location);
+        mission.add_cmd(cmd);
+
+        create_line_cnt++;
+
+        cmd.id = MAV_CMD_NAV_WAYPOINT;
+        cmd.content.location.options = 0;
+        cmd.p1 = 0;
+        cmd.content.location.alt = g.ab_height;
+        cmd.content.location.flags.relative_alt = 1;
+        if(g.k_param_ab_point_mode == 1){
+            cmd.content.location.flags.terrain_alt = 1;
+        }
+        new_coord_from_bearing_and_distance(loc_a,ab_bearing,create_line_cnt*(g.ab_width/100),cmd.content.location);
+        mission.add_cmd(cmd);
+
+        cmd.id = MAV_CMD_NAV_WAYPOINT;
+        cmd.content.location.options = 0;
+        cmd.p1 = 0;
+        cmd.content.location.alt = g.ab_height;
+        cmd.content.location.flags.relative_alt = 1;
+        if(g.k_param_ab_point_mode == 1){
+            cmd.content.location.flags.terrain_alt = 1;
+        }
+        new_coord_from_bearing_and_distance(loc_b,ab_bearing,create_line_cnt*(g.ab_width/100),cmd.content.location);
+        mission.add_cmd(cmd);
+
+        create_line_cnt++;
+
+        if(create_line_cnt >= 50){
+            create_line_cnt = 0;
+            ab_bear_expect = AB_NONE_BEAR;
+            ab_staus_a = AB_NONE;
+            ab_staus_b = AB_NONE;
+            gcs_send_text_fmt(MAV_SEVERITY_CRITICAL,"AB create fly line ok");
+         }
+     }
+}
+
 
 // rc_loops - reads user input from transmitter/receiver
 // called at 100hz

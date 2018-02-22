@@ -149,6 +149,11 @@ const AP_Param::Info Copter::var_info[] = {
     // @User: Standard
     GSCALAR(rtl_speed_cms,   "RTL_SPEED",     0),
 
+    GSCALAR(ab_height,	  "AB_HEIGHT", 		300.0f),
+    GSCALAR(ab_width,	  "AB_WIDTH",		300.0f),
+    //0:barometer or rtk, 1:RangeFinder
+    GSCALAR(ab_point_mode,	  "AB_POINT_MODE", 1),
+
     // @Param: RNGFND_GAIN
     // @DisplayName: Rangefinder gain
     // @Description: Used to adjust the speed with which the target altitude is changed when objects are sensed below the copter

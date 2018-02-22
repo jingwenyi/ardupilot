@@ -90,6 +90,10 @@ void        wgsllh2ecef(const Vector3d &llh, Vector3d &ecef);
 // coordinates (lat, lon, height)
 void        wgsecef2llh(const Vector3d &ecef, Vector3d &llh);
 
+void        new_coord_from_bearing_and_distance(const struct Location &loc,
+    double bearing, float distance, struct Location &res);
+
+
 // return true when lat and lng are within range
 bool        check_lat(float lat);
 bool        check_lng(float lng);

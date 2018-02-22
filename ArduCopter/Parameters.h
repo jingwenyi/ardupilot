@@ -363,9 +363,14 @@ public:
         k_param_rpm_sensor,
         k_param_autotune_min_d, // 251
         k_param_arming, // 252  - AP_Arming
-        k_param_DataFlash = 253, // 253 - Logging Group
+        k_param_DataFlash, // 253 - Logging Group
 
-        // 254,255: reserved
+        //
+        //ab point
+        //
+        k_param_ab_height = 260,
+        k_param_ab_width,
+        k_param_ab_point_mode,
 
         // the k_param_* space is 9-bits in size
         // 511: reserved
@@ -392,6 +397,10 @@ public:
     AP_Int16        rtl_speed_cms;
     AP_Float        rtl_cone_slope;
     AP_Float        rangefinder_gain;
+
+    AP_Float		ab_height;
+    AP_Float		ab_width;
+    AP_Int8         ab_point_mode;
 
     AP_Int8         failsafe_battery_enabled;   // battery failsafe enabled
     AP_Float        fs_batt_voltage;            // battery voltage below which failsafe will be triggered

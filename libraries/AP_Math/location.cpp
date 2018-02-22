@@ -297,6 +297,25 @@ void wgsecef2llh(const Vector3d &ecef, Vector3d &llh) {
   llh[2] = (p*e_c*C + fabs(ecef[2])*S - WGS84_A*e_c*A_n) / sqrt(e_c*e_c*C*C + S*S);
 }
 
+void new_coord_from_bearing_and_distance(const struct Location &loc,
+        double bearing, float distance, struct Location &res)
+{
+    double lat = (double)(loc.lat/1.0e7);
+    double lon = (double)(loc.lng/1.0e7);
+
+    double lat1 = ToRad(lat);
+    double lon1 = ToRad(lon);
+    double brng = ToRad((bearing > 360) ? (bearing - 360): ((bearing < 0) ? (bearing + 360):bearing));
+    double dr = distance / RADIUS_OF_EARTH;
+
+    double lat2 = asin(sin(lat1)*cos(dr)+ cos(lat1)*sin(dr)*cos(brng));
+    double lon2 = lon1 + atan2(sin(brng)*sin(dr)*cos(lat1), cos(dr) - sin(lat1)*sin(lat2));
+
+    res.lat = (int32_t)(ToDeg(lat2)*1.0e7);
+    res.lng = (int32_t)(ToDeg(lon2)*1.0e7);
+}
+
+
 // return true when lat and lng are within range
 bool check_lat(float lat)
 {

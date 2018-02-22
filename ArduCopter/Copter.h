@@ -151,6 +151,30 @@ public:
     void loop() override;
 
 private:
+    //ab point
+	struct Location loc_a;
+
+	struct Location loc_b;
+
+	uint16_t create_line_cnt;
+	double ab_bearing;
+
+	enum AB_stauts{
+		AB_NONE = 0,
+		AB_A_SET = 1,
+		AB_B_SET = 2
+	};
+
+	enum AB_bear{
+		AB_NONE_BEAR = 0,
+		AB_RIGHT = 1,
+		AB_LEFT = 2
+	};
+
+	enum AB_stauts ab_staus_a;
+	enum AB_stauts ab_staus_b;
+	enum AB_bear ab_bear_expect;
+    
     // key aircraft parameters passed to multiple libraries
     AP_Vehicle::MultiCopter aparm;
 
@@ -641,6 +665,7 @@ private:
     void perf_update(void);
     void fast_loop();
     void rc_loop();
+     void ab_create_line();
     void throttle_loop();
     void update_mount();
     void update_trigger(void);

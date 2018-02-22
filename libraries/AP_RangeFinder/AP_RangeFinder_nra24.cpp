@@ -96,7 +96,6 @@ bool AP_RangeFinder_nra24::get_reading(uint16_t &reading_cm)
             }else{
                 nra24_cmd_status = NRA24_CMD_HIGH_HEAD;
             }
-            
           }else if(nra24_cmd_status == NRA24_CMD_HIGH_END){
             if(c == 0x55){
                 nra24_cmd_status = NRA24_CMD_LOW_END;
@@ -104,21 +103,18 @@ bool AP_RangeFinder_nra24::get_reading(uint16_t &reading_cm)
                 nra24_cmd_status = NRA24_CMD_HIGH_HEAD;
             }
           }else if(nra24_cmd_status == NRA24_CMD_LOW_END){
-            
             if(c == 0x55){
                 sum += data_buffer[0] * 256 + data_buffer[1];
                 count++;
             }
             nra24_cmd_status = NRA24_CMD_HIGH_HEAD;
           }
-         
     }
 
     nra24_cmd_status = NRA24_CMD_HIGH_HEAD;
-    
     // we need to write a byte to prompt another reading
     uart->write('d');
-    
+
     if (count == 0) {
         return false;
     }

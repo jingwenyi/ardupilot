@@ -1,9 +1,8 @@
 /*
 ** author:jingwenyi
 ** date:2017/10
-** 
+**
 */
-
 
 
 #pragma once
@@ -17,8 +16,6 @@ public:
     // constructor
     AP_RangeFinder_nra24(RangeFinder &ranger, uint8_t instance, RangeFinder::RangeFinder_State &_state,
                                            AP_SerialManager &serial_manager);
-    
-
     // static detection function
     static bool detect(RangeFinder &ranger, uint8_t instance, AP_SerialManager &serial_manager);
 
@@ -34,7 +31,7 @@ private:
         NRA24_CMD_LOW_HEAD  = 1,    //0XAA
         NRA24_CMD_HIGH_ID   = 2,    //0X0C
         NRA24_CMD_LOW_ID    = 3,    //0X07
-        NRA24_CMD_DATA_INDEX= 4,    
+        NRA24_CMD_DATA_INDEX= 4,
         NRA24_CMD_DATA_RCS  = 5,
         NRA24_CMD_DATA_RANGEH = 6,
         NRA24_CMD_DATA_RANGEL = 7,

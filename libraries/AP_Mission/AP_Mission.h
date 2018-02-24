@@ -317,6 +317,8 @@ public:
     /// check mission starts with a takeoff command
     bool starts_with_takeoff_cmd();
 
+    void leishen_set_cmd_total(uint16_t num);
+
     /// reset - reset mission to the first command
     void reset();
 

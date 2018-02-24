@@ -277,6 +277,10 @@ void Copter::exit_mode(control_mode_t old_control_mode, control_mode_t new_contr
     if (old_control_mode == AUTO) {
         if (mission.state() == AP_Mission::MISSION_RUNNING) {
             mission.stop();
+            if(new_control_mode == RTL || new_control_mode == LAND){
+                save_unexecuted_points();
+                mission.reset();
+            }
         }
 #if MOUNT == ENABLED
         camera_mount.set_mode_to_default();

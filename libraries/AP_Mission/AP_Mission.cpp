@@ -117,6 +117,12 @@ void AP_Mission::resume()
     }
 }
 
+void AP_Mission::leishen_set_cmd_total(uint16_t num)
+{
+	_cmd_total.set_and_save(num);
+}
+
+
 /// check mission starts with a takeoff command
 bool AP_Mission::starts_with_takeoff_cmd()
 {

@@ -98,3 +98,29 @@ void Copter::run_autopilot()
         mission.update();
     }
 }
+
+//Save the unexecuted navigation points.
+void Copter::save_unexecuted_points()
+{
+    uint16_t cur_nav_cmd_index = mission.get_current_nav_index();
+
+	if(cur_nav_cmd_index >= 2){
+	    AP_Mission::Mission_Command my_nav;
+	    mission.read_cmd_from_storage(1, my_nav);
+
+		my_nav.content.location.lng = inertial_nav.get_longitude();
+		my_nav.content.location.lat = inertial_nav.get_latitude();
+		mission.write_cmd_to_storage(1,my_nav);
+
+		uint16_t i;
+		uint16_t j;
+
+		for(i=cur_nav_cmd_index, j=2; i<mission.num_commands(); i++, j++)
+		{
+			AP_Mission::Mission_Command temp_nav;
+			mission.read_cmd_from_storage(i, temp_nav);
+			mission.write_cmd_to_storage(j, temp_nav);
+		}
+		mission.leishen_set_cmd_total(j);
+    }
+}

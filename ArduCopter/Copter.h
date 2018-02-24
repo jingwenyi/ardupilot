@@ -1173,6 +1173,7 @@ private:
     void init_capabilities(void);
     void dataflash_periodic(void);
     void accel_cal_update(void);
+    void save_unexecuted_points(void);
 
 public:
     void mavlink_delay_cb();

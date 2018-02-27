@@ -28,7 +28,7 @@
 #include "AP_RangeFinder_uLanding.h"
 #include "AP_RangeFinder_trone.h"
 #include "AP_RangeFinder_nra24.h"
-
+#include "AP_RangeFinder_usharp.h"
 #include <AP_BoardConfig/AP_BoardConfig.h>
 
 extern const AP_HAL::HAL &hal;
@@ -710,6 +710,12 @@ void RangeFinder::detect_instance(uint8_t instance)
          if (AP_RangeFinder_nra24::detect(*this, instance, serial_manager)) {
             state[instance].instance = instance;
             drivers[instance] = new AP_RangeFinder_nra24(*this, instance, state[instance], serial_manager);
+        }
+        break;
+     case RangeFinder_TYPE_USHARP:
+        if (AP_RangeFinder_uSharp::detect(*this, instance, serial_manager)) {
+            state[instance].instance = instance;
+            drivers[instance] = new AP_RangeFinder_uSharp(*this, instance, state[instance], serial_manager);
         }
         break;
     default:

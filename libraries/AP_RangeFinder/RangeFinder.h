@@ -54,6 +54,7 @@ public:
         RangeFinder_TYPE_TRONE  = 14,
         RangeFinder_TYPE_PLI2CV3= 15,
         RangeFinder_TYPE_NRA24  = 16,
+        RangeFinder_TYPE_USHARP = 17,
     };
 
     enum RangeFinder_Function {

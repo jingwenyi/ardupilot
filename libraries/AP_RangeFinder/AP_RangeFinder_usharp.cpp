@@ -100,13 +100,11 @@ bool AP_RangeFinder_uSharp::get_reading(uint16_t &reading_cm)
             uSharp_cmd_status = uSharp_CMD_LOW_HEAD;
     
          }
-        
 
     }
 
     uSharp_cmd_status = uSharp_CMD_LOW_HEAD;
 
-    
     // we need to write a byte to prompt another reading
     uart->write('d');
 
@@ -123,7 +121,7 @@ bool AP_RangeFinder_uSharp::get_reading(uint16_t &reading_cm)
     }else{
         filter_distance = 0.02f * read_distance + 0.98f * filter_distance;
     }
-    
+
     reading_cm = filter_distance;
     return true;
 }

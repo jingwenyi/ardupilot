@@ -32,8 +32,8 @@ private:
     enum uSharp{
         uSharp_CMD_LOW_HEAD     = 0,   //0XFF
         uSharp_CMD_HIGH_HEAD    = 1,    //0XFF
-        uSharp_CMD_DATA          = 2,    
-        uSharp_CMD_SNR           = 3,    
+        uSharp_CMD_DATA          = 2,
+        uSharp_CMD_SNR           = 3,
         uSharp_CMD_CRC           = 4,
     }uSharp_cmd_status;
 };

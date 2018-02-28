@@ -252,6 +252,14 @@ const AP_Param::GroupInfo AP_GPS::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("BLEND_TC", 21, AP_GPS, _blend_tc, 10.0f),
 
+    // @Param: HEAD_OFFSET
+    // @DisplayName: Rtk Gps heading offset
+    // @Description: Offset of rtk gps heading, rotated depend on body frame.
+    // @Units: degrees
+    // @Range: -180.0 180.0
+    // @User: Advanced
+    AP_GROUPINFO("HEAD_OFFSET", 22, AP_GPS, _head_offset, 0.0f),
+
     AP_GROUPEND
 };
 
@@ -322,6 +330,14 @@ bool AP_GPS::vertical_accuracy(uint8_t instance, float &vacc) const
     return false;
 }
 
+bool AP_GPS::heading_accuracy(uint8_t instance, float &hacc) const
+{
+    if (state[instance].have_heading_accuracy) {
+        hacc = state[instance].heading_accuracy;
+        return true;
+    }
+    return false;
+}
 
 /**
    convert GPS week and milliseconds to unix epoch in milliseconds

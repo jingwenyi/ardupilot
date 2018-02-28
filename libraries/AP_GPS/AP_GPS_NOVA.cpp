@@ -269,6 +269,57 @@ AP_GPS_NOVA::process_message(void)
         return false;
     }
 
+    if (messageid == 971) //heading
+    {
+        const heading &headingu = nova_msg.data.headingu;
+
+        state.heading = (float) headingu.heading;
+        state.have_heading = true;
+        state.heading_accuracy = (float) headingu.hdgsdev;
+        state.have_heading_accuracy = true;
+
+        if (headingu.solstat == 0) // have a solution
+        {
+            switch (headingu.postype)
+            {
+                case 16:
+                    state.heading_status = AP_GPS::GPS_OK_FIX_3D;
+                    break;
+                case 17: // psrdiff
+                case 18: // waas
+                case 20: // omnistar
+                case 68: // ppp_converg
+                case 69: // ppp
+                    state.heading_status = AP_GPS::GPS_OK_FIX_3D_DGPS;
+                    break;
+                case 32: // l1 float
+                case 33: // iono float
+                case 34: // narrow float
+                    state.heading_status = AP_GPS::GPS_OK_FIX_3D_RTK_FLOAT;
+                    break;
+                case 48: // l1 int
+                case 50: // narrow int
+                    state.heading_status = AP_GPS::GPS_OK_FIX_3D_RTK_FIXED;
+                    break;
+                case 0: // NONE
+                case 1: // FIXEDPOS
+                case 2: // FIXEDHEIGHT
+                default:
+                    state.heading_status = AP_GPS::NO_FIX;
+                    break;
+            }
+        }
+        else
+        {
+            state.heading_status = AP_GPS::NO_FIX;
+        }
+
+        Debug("heading %.2f, accuracy %.2f\n", state.heading, state.heading_accuracy);
+        Debug("solstat %d, postype %d t %d\n", headingu.solstat, state.heading_status, AP_HAL::millis());
+
+        return false;
+    }
+
     // ensure out position and velocity stay insync
     if (_new_position && _new_speed && _last_vel_time == state.time_week_ms) {
         _new_speed = _new_position = false;

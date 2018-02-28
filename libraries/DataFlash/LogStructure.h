@@ -67,6 +67,9 @@ struct PACKED log_GPA {
     uint16_t sacc;
     uint8_t  have_vv;
     uint32_t sample_ms;
+    uint8_t  hdgs;
+    float    hdg;
+    uint16_t hdgacc;
 };
 
 struct PACKED log_Message {
@@ -823,8 +826,10 @@ struct PACKED log_Beacon {
 #define ESC_LABELS "TimeUS,RPM,Volt,Curr,Temp"
 #define ESC_FMT   "Qcccc"
 
-#define GPA_LABELS "TimeUS,VDop,HAcc,VAcc,SAcc,VV,SMS"
-#define GPA_FMT   "QCCCCBI"
+
+
+#define GPA_LABELS "TimeUS,VDop,HAcc,VAcc,SAcc,VV,SMS,HDGS,HDG,HDGAcc"
+#define GPA_FMT   "QCCCCBIBfC"
 
 // see "struct GPS_State" and "Log_Write_GPS":
 #define GPS_LABELS "TimeUS,Status,GMS,GWk,NSats,HDop,Lat,Lng,Alt,Spd,GCrs,VZ,U"

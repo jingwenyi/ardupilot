@@ -266,6 +266,11 @@ void NavEKF2_core::SelectVelPosFusion()
         fusePosData = false;
     }
 
+    // use gps heading for yaw
+    if(gpsDataToFuse && !use_compass()){
+        FuseGpsHeading();
+    }
+
     // we have GPS data to fuse and a request to align the yaw using the GPS course
     if (gpsYawResetRequest) {
         realignYawGPS();

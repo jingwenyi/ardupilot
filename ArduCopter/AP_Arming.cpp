@@ -129,7 +129,7 @@ bool AP_Arming_Copter::compass_checks(bool display_failure)
     if ((checks_to_perform == ARMING_CHECK_ALL) || (checks_to_perform & ARMING_CHECK_COMPASS)) {
         // check compass offsets have been set.  AP_Arming only checks
         // this if learning is off; Copter *always* checks.
-        if (!_compass.configured()) {
+        if (_compass.use_for_yaw() && !_compass.configured()) {
             if (display_failure) {
                 gcs_send_text(MAV_SEVERITY_CRITICAL,"PreArm: Compass not calibrated");
             }
@@ -636,27 +636,29 @@ bool AP_Arming_Copter::arm_checks(bool display_failure, bool arming_from_gcs)
         return false;
     }
 
-    // check compass health
-    if (!_compass.healthy()) {
-        if (display_failure) {
-            gcs_send_text(MAV_SEVERITY_CRITICAL,"Arm: Compass not healthy");
+    if (_compass.use_for_yaw()) {
+        // check compass health
+        if (!_compass.healthy()) {
+            if (display_failure) {
+                gcs_send_text(MAV_SEVERITY_CRITICAL,"Arm: Compass not healthy");
+            }
+            return false;
         }
-        return false;
-    }
 
-    if (_compass.is_calibrating()) {
-        if (display_failure) {
-            gcs_send_text(MAV_SEVERITY_CRITICAL,"Arm: Compass calibration running");
+        if (_compass.is_calibrating()) {
+            if (display_failure) {
+                gcs_send_text(MAV_SEVERITY_CRITICAL,"Arm: Compass calibration running");
+            }
+            return false;
         }
-        return false;
-    }
 
-    //check if compass has calibrated and requires reboot
-    if (_compass.compass_cal_requires_reboot()) {
-        if (display_failure) {
-            gcs_send_text(MAV_SEVERITY_CRITICAL, "PreArm: Compass calibrated requires reboot");
+        //check if compass has calibrated and requires reboot
+        if (_compass.compass_cal_requires_reboot()) {
+            if (display_failure) {
+                gcs_send_text(MAV_SEVERITY_CRITICAL, "PreArm: Compass calibrated requires reboot");
+            }
+            return false;
         }
-        return false;
     }
 
     control_mode_t control_mode = copter.control_mode;

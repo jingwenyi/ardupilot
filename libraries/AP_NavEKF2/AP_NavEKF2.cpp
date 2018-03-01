@@ -534,6 +534,23 @@ const AP_Param::GroupInfo NavEKF2::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("MAG_MASK", 48, NavEKF2, _magMask, 0),
 
+    // @Param: YAW_H_NSE
+    // @DisplayName: Yaw measurement noise (rad)
+    // @Description: This is the RMS value of noise in yaw measurements from the gps heading. Increasing it reduces the weighting on these measurements.
+    // @Range: 0.05 1.0
+    // @Increment: 0.05
+    // @User: Advanced
+    // @Units: gauss
+    AP_GROUPINFO("YAW_H_NSE", 49, NavEKF2, _yawGpsHeadNoise, 0.25f),
+
+    // @Param: YAW_HI_GATE
+    // @DisplayName: Yaw measurement gate size
+    // @Description: This sets the percentage number of standard deviations applied to the gps head yaw measurement innovation consistency check. Decreasing it makes it more likely that good measurements will be rejected. Increasing it makes it more likely that bad measurements will be accepted.
+    // @Range: 100 1000
+    // @Increment: 25
+    // @User: Advanced
+    AP_GROUPINFO("YAW_HI_GATE", 50, NavEKF2, _yawGHInnovGate, 300),
+
     AP_GROUPEND
 };
 

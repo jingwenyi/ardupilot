@@ -374,6 +374,8 @@ private:
     AP_Int8  _rngBcnDelay_ms;       // effective average delay of range beacon measurements rel to IMU (msec)
     AP_Float _useRngSwSpd;          // Maximum horizontal ground speed to use range finder as the primary height source (m/s)
     AP_Int8 _magMask;               // Bitmask forcng specific EKF core instances to use simple heading magnetometer fusion.
+    AP_Float _yawGpsHeadNoise;      // gps heading yaw measurement noise:rad
+    AP_Int16 _yawGHInnovGate;       //Percentage number of standard deviations applied to gps heading yaw innovation consistency check
 
     // Tuning parameters
     const float gpsNEVelVarAccScale;    // Scale factor applied to NE velocity measurement variance due to manoeuvre acceleration

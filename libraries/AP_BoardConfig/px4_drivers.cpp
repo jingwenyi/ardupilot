@@ -319,6 +319,7 @@ void AP_BoardConfig::px4_setup_drivers(void)
     case PX4_BOARD_PH2SLIM:
     case PX4_BOARD_AEROFC:
     case PX4_BOARD_PIXHAWK_PRO:
+	case PX4_BOARD_RAINPX:
         break;
     default:
         sensor_config_error("Unknown board type");
@@ -405,10 +406,8 @@ void AP_BoardConfig::px4_setup_peripherals(void)
         sensor_config_error("no ADC found");
     }
 
-#if HAL_PX4_HAVE_PX4IO
-    if (px4.io_enable.get() != 0) {
-        px4_setup_px4io();
-    }
+#ifndef CONFIG_ARCH_BOARD_PX4FMU_V4
+    //px4_setup_px4io();
 #endif
 
 #if defined(CONFIG_ARCH_BOARD_PX4FMU_V1)
@@ -546,6 +545,13 @@ void AP_BoardConfig::px4_autodetect(void)
 #elif defined(CONFIG_ARCH_BOARD_AEROFC_V1)
     px4.board_type.set_and_notify(PX4_BOARD_AEROFC);
     hal.console->printf("Detected Aero FC\n");
+#elif defined(CONFIG_ARCH_BOARD_RAINPX_V2)
+    if (spi_check_register(HAL_INS_MPU60x0_NAME, MPUREG_WHOAMI, MPU_WHOAMI_MPU60X0) &&
+        spi_check_register(HAL_INS_LSM9DS0_A_NAME, LSMREG_WHOAMI, LSM_WHOAMI_LSM303D)) {
+        // RainPx has LSM303D and MPUxxxx on external bus
+        px4.board_type.set_and_notify(PX4_BOARD_RAINPX);
+        hal.console->printf("Detected RAINPX\n");
+	}
 #endif
 
 }

@@ -579,3 +579,12 @@ class aerofc_v1(px4):
         self.romfs_exclude(['oreoled.bin'])
         self.board_rc = True
         self.param_defaults = '../../../Tools/Frame_params/intel-aero-rtf.param'
+
+class rainpx_v2(px4):
+    name = 'rainpx-v2'
+    def __init__(self):
+        super(rainpx_v2, self).__init__()
+        self.bootloader_name = 'rainpxv2_bl.bin'
+        self.board_name = 'rainpx-v2'
+        self.with_uavcan = True
+        self.param_defaults = '../../../Tools/Frame_params/rainpx.param'

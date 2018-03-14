@@ -60,6 +60,11 @@ static const struct {
     { 15,  6.6f/4096  },    // analog airspeed sensor, 2:1 scaling
 #elif defined(CONFIG_ARCH_BOARD_AEROFC_V1)
     { 1,   3.3f/4096  },
+#elif defined(CONFIG_ARCH_BOARD_RAINPX_V2)
+    { 4,   6.6f/4096  },    // VCC 5V rail sense
+    { 10,   3.3f/4096  },    // 3DR Brick current, usually 10.1:1
+                            // scaled from battery voltage
+    { 12,   3.3f/4096  },    // 3DR Brick voltage, usually 17:1 scaled
 #else
 #error "Unknown board type for AnalogIn scaling"
 #endif
@@ -275,7 +280,7 @@ void PX4AnalogIn::_timer_tick(void)
     if (ret > 0) {
         // match the incoming channels to the currently active pins
         for (uint8_t i=0; i<ret/sizeof(buf_adc[0]); i++) {
-#if defined(CONFIG_ARCH_BOARD_PX4FMU_V2) || defined(CONFIG_ARCH_BOARD_PX4FMU_V4) || defined(CONFIG_ARCH_BOARD_PX4FMU_V4PRO)
+#if defined(CONFIG_ARCH_BOARD_PX4FMU_V2) || defined(CONFIG_ARCH_BOARD_PX4FMU_V4) || defined(CONFIG_ARCH_BOARD_PX4FMU_V4PRO) || defined(CONFIG_ARCH_BOARD_RAINPX_V2)
             if (buf_adc[i].am_channel == 4) {
                 // record the Vcc value for later use in
                 // voltage_average_ratiometric()
@@ -331,7 +336,7 @@ void PX4AnalogIn::_timer_tick(void)
     }
 #endif
 
-#if defined(CONFIG_ARCH_BOARD_PX4FMU_V2) || defined(CONFIG_ARCH_BOARD_PX4FMU_V4) || defined(CONFIG_ARCH_BOARD_PX4FMU_V4PRO)
+#if defined(CONFIG_ARCH_BOARD_PX4FMU_V2) || defined(CONFIG_ARCH_BOARD_PX4FMU_V4) || defined(CONFIG_ARCH_BOARD_PX4FMU_V4PRO) || defined(CONFIG_ARCH_BOARD_RAINPX_V2)
     // check for new servorail data on FMUv2
     if (_servorail_handle != -1) {
         struct servorail_status_s servorail;

@@ -44,11 +44,9 @@
 #elif defined(CONFIG_ARCH_BOARD_PX4FMU_V4)
 #define BOARD_PWM_COUNT_DEFAULT 6
 #define BOARD_SER1_RTSCTS_DEFAULT 2
-#elif defined(CONFIG_ARCH_BOARD_AEROFC_V1)
-#define BOARD_PWM_COUNT_DEFAULT 0
-#define BOARD_SER1_RTSCTS_DEFAULT 0
-# undef BOARD_SAFETY_ENABLE_DEFAULT
-# define BOARD_SAFETY_ENABLE_DEFAULT 0
+#elif defined(CONFIG_ARCH_BOARD_RAINPX_V2)
+#define BOARD_PWM_COUNT_DEFAULT 8
+#define BOARD_SER1_RTSCTS_DEFAULT 2
 #else // V2
 #define BOARD_PWM_COUNT_DEFAULT 4
 #define BOARD_SER1_RTSCTS_DEFAULT 2
@@ -167,19 +165,6 @@ const AP_Param::GroupInfo AP_BoardConfig::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("TYPE", 9, AP_BoardConfig, px4.board_type, BOARD_TYPE_DEFAULT),
 #endif
-
-#if CONFIG_HAL_BOARD == HAL_BOARD_PX4 || CONFIG_HAL_BOARD == HAL_BOARD_VRBRAIN
-#if HAL_PX4_HAVE_PX4IO
-    // @Param: BRD_IO_ENABLE
-    // @DisplayName: Enable IO co-processor
-    // @Description: This allows for the IO co-processor on FMUv1 and FMUv2 to be disabled
-    // @Values: 0:Disabled,1:Enabled
-    // @RebootRequired: True
-    // @User: Advanced
-    AP_GROUPINFO("IO_ENABLE", 10, AP_BoardConfig, px4.io_enable, 1),
-#endif
-#endif
-
     AP_GROUPEND
 };
 

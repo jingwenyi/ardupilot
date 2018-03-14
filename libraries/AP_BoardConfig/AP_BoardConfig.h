@@ -63,6 +63,7 @@ public:
         PX4_BOARD_PIXRACER = 4,
         PX4_BOARD_PHMINI   = 5,
         PX4_BOARD_PH2SLIM  = 6,
+		PX4_BOARD_RAINPX   = 7,
         PX4_BOARD_AEROFC   = 13,
         PX4_BOARD_PIXHAWK_PRO = 14,
         PX4_BOARD_AUAV21   = 20,
@@ -122,7 +123,6 @@ private:
         AP_Int8 sbus_out_rate;
 #endif
         AP_Int8 board_type;
-        AP_Int8 io_enable;
     } px4;
 
     static enum px4_board_type px4_configured_board;

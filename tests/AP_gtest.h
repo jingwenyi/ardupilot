@@ -3,6 +3,7 @@
  */
 #include <gtest/gtest.h>
 
+//test git
 
 #define AP_GTEST_PRINTATBLE_PARAM_MEMBER(class_name_, printable_member_) \
 ::std::ostream& operator<<(::std::ostream& os, const class_name_& param) \

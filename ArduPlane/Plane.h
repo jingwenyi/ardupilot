@@ -156,6 +156,13 @@ public:
     void loop() override;
 
 private:
+    //load param status
+    enum  LOAD_PARAM_stauts{
+        LOAD_PARAM_OK = 0,
+        LOAD_PARAM_FAILED = 1,
+        PARAM_VERSION_ERR = 2
+    };
+    enum LOAD_PARAM_stauts load_param_flag;
     // key aircraft parameters passed to multiple libraries
     AP_Vehicle::FixedWing aparm;
     AP_HAL::BetterStream* cliSerial;

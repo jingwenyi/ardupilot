@@ -1269,16 +1269,17 @@ void Plane::load_parameters(void)
         cliSerial->printf("Bad parameter table\n");
         AP_HAL::panic("Bad parameter table");
     }
-    if (!g.format_version.load() ||
-        g.format_version != Parameters::k_format_version) {
 
-        // erase all parameters
-        cliSerial->printf("Firmware change: erasing EEPROM...\n");
-        AP_Param::erase_all();
+    load_param_flag = LOAD_PARAM_OK;
 
-        // save the current format version
-        g.format_version.set_and_save(Parameters::k_format_version);
-        cliSerial->printf("done.\n");
+    if(!g.format_version.load()){
+        load_param_flag = LOAD_PARAM_FAILED;
+        return;
+    }
+
+    if(g.format_version != Parameters::k_format_version){
+        load_param_flag = PARAM_VERSION_ERR;
+        return;
     }
 
     uint32_t before = micros();

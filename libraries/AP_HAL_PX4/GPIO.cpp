@@ -29,7 +29,7 @@ PX4GPIO::PX4GPIO()
 
 void PX4GPIO::init()
 {
-#if defined(CONFIG_ARCH_BOARD_PX4FMU_V1) || defined(CONFIG_ARCH_BOARD_PX4FMU_V4)
+#if defined(CONFIG_ARCH_BOARD_PX4FMU_V1) || defined(CONFIG_ARCH_BOARD_PX4FMU_V4) || defined(CONFIG_ARCH_BOARD_UAVRS_V1)
     _led_fd = open(LED0_DEVICE_PATH, O_RDWR);
     if (_led_fd == -1) {
         AP_HAL::panic("Unable to open " LED0_DEVICE_PATH);
@@ -46,6 +46,7 @@ void PX4GPIO::init()
     }
 #endif
 #endif
+#if 0
 #if !defined(CONFIG_ARCH_BOARD_AEROFC_V1)
     _tone_alarm_fd = open(TONEALARM0_DEVICE_PATH, O_WRONLY);
     if (_tone_alarm_fd == -1) {
@@ -53,6 +54,18 @@ void PX4GPIO::init()
     }
 
     _gpio_fmu_fd = open(PX4FMU_DEVICE_PATH, 0);
+    if (_gpio_fmu_fd == -1) {
+        AP_HAL::panic("Unable to open GPIO");
+    }
+#endif
+#else
+	#if !defined(CONFIG_ARCH_BOARD_UAVRS_V1)
+    _tone_alarm_fd = open(TONEALARM0_DEVICE_PATH, O_WRONLY);
+    if (_tone_alarm_fd == -1) {
+        AP_HAL::panic("Unable to open " TONEALARM0_DEVICE_PATH);
+    }
+	#endif
+	_gpio_fmu_fd = open(PX4FMU_DEVICE_PATH, 0);
     if (_gpio_fmu_fd == -1) {
         AP_HAL::panic("Unable to open GPIO");
     }

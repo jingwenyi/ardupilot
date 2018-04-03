@@ -35,6 +35,15 @@ bool AP_Arming_Plane::pre_arm_checks(bool report)
     // Check airspeed sensor
     ret &= AP_Arming::airspeed_checks(report);
 
+    if(plane.load_param_flag != Plane::LOAD_PARAM_OK){
+        if(plane.load_param_flag == Plane::LOAD_PARAM_FAILED){
+            gcs().send_text(MAV_SEVERITY_CRITICAL, "PreArm:init load parameter error");
+        }else if(plane.load_param_flag == Plane::PARAM_VERSION_ERR){
+            gcs().send_text(MAV_SEVERITY_CRITICAL, "PreArm:init parameter version error");
+        }
+        ret = false;
+    }
+
     if (plane.aparm.roll_limit_cd < 300) {
         if (report) {
             gcs().send_text(MAV_SEVERITY_CRITICAL, "PreArm: LIM_ROLL_CD too small (%u)", plane.aparm.roll_limit_cd);

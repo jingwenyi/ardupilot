@@ -55,6 +55,7 @@
 #define HAL_BOARD_SUBTYPE_VRCORE_V10       4005
 #define HAL_BOARD_SUBTYPE_VRBRAIN_V54      4006
 
+#define HAL_BOARD_SUBTYPE_UAVRS_V1           6000
 /* InertialSensor driver types */
 #define HAL_INS_MPU60XX_SPI  2
 #define HAL_INS_MPU60XX_I2C  3

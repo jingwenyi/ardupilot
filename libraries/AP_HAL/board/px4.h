@@ -42,6 +42,10 @@
 // we don't have any sdcard
 #undef HAL_BOARD_LOG_DIRECTORY
 #undef HAL_BOARD_TERRAIN_DIRECTORY
+#elif defined(CONFIG_ARCH_BOARD_UAVRS_V1)
+#define CONFIG_HAL_BOARD_SUBTYPE HAL_BOARD_SUBTYPE_UAVRS_V1
+#define HAL_STORAGE_SIZE            16384
+#define HAL_WITH_UAVCAN             1
 #else
 #error "Unknown PX4 board type"
 #endif
@@ -103,6 +107,11 @@
 #define HAL_PX4_HAVE_MTD_SUPPORT 0
 #define HAL_PX4_HAVE_PX4IO 0
 #define HAL_PX4_HAVE_PWM_INPUT 0
+#endif
+
+/* uavrs-v1 */
+#ifdef CONFIG_ARCH_BOARD_UAVRS_V1
+#define HAL_PX4_HAVE_PX4IO 0
 #endif
 
 /* default values */

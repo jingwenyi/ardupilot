@@ -192,7 +192,7 @@ def _process_romfs(self):
         'init.d/rc.APM',
         'init.d/rc.error',
         'init.d/rcS',
-        #'tones/startup',
+        'tones/startup',
         (bld.env.PX4_BOOTLOADER, 'bootloader/fmu_bl.bin'),
     ]
 

@@ -269,10 +269,11 @@ void DataFlash_Class::Log_Write_GPS(const AP_GPS &gps, uint8_t i, uint64_t time_
     WriteBlock(&pkt, sizeof(pkt));
 
     /* write auxiliary accuracy information as well */
-    float hacc = 0, vacc = 0, sacc = 0;
+    float hacc = 0, vacc = 0, sacc = 0, hdgacc = 0;
     gps.horizontal_accuracy(i, hacc);
     gps.vertical_accuracy(i, vacc);
     gps.speed_accuracy(i, sacc);
+    gps.heading_accuracy(i, hdgacc);
     struct log_GPA pkt2 = {
         LOG_PACKET_HEADER_INIT((uint8_t)(LOG_GPA_MSG+i)),
         time_us       : time_us,
@@ -281,7 +282,10 @@ void DataFlash_Class::Log_Write_GPS(const AP_GPS &gps, uint8_t i, uint64_t time_
         vacc          : (uint16_t)MIN((vacc*100), UINT16_MAX),
         sacc          : (uint16_t)MIN((sacc*100), UINT16_MAX),
         have_vv       : (uint8_t)gps.have_vertical_velocity(i),
-        sample_ms     : gps.last_message_time_ms(i)
+        sample_ms     : gps.last_message_time_ms(i),
+        hdgs          : gps.heading_status(i),
+        hdg           : gps.get_heading(i),
+        hdgacc        : (uint16_t)(hdgacc*100)
     };
     WriteBlock(&pkt2, sizeof(pkt2));
 }

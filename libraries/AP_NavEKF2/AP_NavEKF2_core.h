@@ -400,8 +400,9 @@ private:
         Vector2f    pos;         // 0..1
         float       hgt;         // 2
         Vector3f    vel;         // 3..5
-        uint32_t    time_ms;     // 6
-        uint8_t     sensor_idx;  // 7..9
+        float       hdg;         //6
+        uint32_t    time_ms;     // 7
+        uint8_t     sensor_idx;  // 8..9
     };
 
     struct mag_elements {
@@ -714,6 +715,12 @@ private:
 
     // update timing statistics structure
     void updateTimingStatistics(void);
+
+    void FuseGpsHeading();
+
+    void UseGpsHeadingResetYaw();
+
+    void fuseEulerYawUseGpsHead();
     
     // Length of FIFO buffers used for non-IMU sensor data.
     // Must be larger than the time period defined by IMU_BUFFER_LENGTH
@@ -1051,6 +1058,7 @@ private:
     float posDownAtLastMagReset;    // vertical position last time the mag states were reset (m)
     float yawInnovAtLastMagReset;   // magnetic yaw innovation last time the yaw and mag field states were reset (rad)
     Quaternion quatAtLastMagReset;  // quaternion states last time the mag states were reset
+    bool inflightYawResetRequest;   // true when then planner request reset yaw
 
     // flags indicating severe numerical errors in innovation variance calculation for different fusion operations
     struct {

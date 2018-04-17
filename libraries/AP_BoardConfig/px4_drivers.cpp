@@ -294,6 +294,7 @@ void AP_BoardConfig::px4_setup_px4io(void)
 {
     if (px4_start_driver(px4io_main, "px4io", "start norc")) {
         printf("px4io started OK\n");
+        px4_tone_alarm("MBABGP");
     } else {
         // might be in bootloader mode if user held down safety switch
         // at power on

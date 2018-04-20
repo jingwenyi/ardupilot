@@ -306,6 +306,21 @@ bool PX4GPIO::usb_connected(void)
     return stm32_gpioread(GPIO_OTGFS_VBUS) && _usb_connected;
 }
 
+/*
+  return true wen imu data ready
+ */
+bool PX4GPIO::imu_data_ready(void)
+{
+    return stm32_gpioread(GPIO_IMU_DATA_READY_INPUT);
+}
+
+/*
+  reset imu by hardware io
+ */
+void PX4GPIO::imu_reset(bool level)
+{
+    return stm32_gpiowrite(GPIO_IMU_DATA_RESET_OUTPUT, level);
+}
 
 PX4DigitalSource::PX4DigitalSource(uint8_t v) :
     _v(v)

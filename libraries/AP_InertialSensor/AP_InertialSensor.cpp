@@ -16,6 +16,7 @@
 #include "AP_InertialSensor_L3G4200D.h"
 #include "AP_InertialSensor_LSM9DS0.h"
 #include "AP_InertialSensor_Invensense.h"
+#include "AP_InertialSensor_ADIS16XXX.h"
 #include "AP_InertialSensor_PX4.h"
 #include "AP_InertialSensor_QURT.h"
 #include "AP_InertialSensor_SITL.h"
@@ -757,13 +758,7 @@ AP_InertialSensor::detect_backends(void)
         break;
 	case AP_BoardConfig::PX4_BOARD_UAVRS:
 		_fast_sampling_mask.set_default(1);
-		_add_backend(AP_InertialSensor_Invensense::probe(*this, hal.spi->get_device(HAL_INS_MPU60x0_NAME), ROTATION_YAW_180));
-		_add_backend(AP_InertialSensor_LSM9DS0::probe(*this,
-													  hal.spi->get_device(HAL_INS_LSM9DS0_G_NAME),
-													  hal.spi->get_device(HAL_INS_LSM9DS0_A_NAME),
-													  ROTATION_YAW_180,
-													  ROTATION_ROLL_180_YAW_270,
-													  ROTATION_NONE));
+		_add_backend(AP_InertialSensor_ADIS16XXX::probe(*this, hal.spi->get_device(HAL_INS_ADIS16XXX_NAME), ROTATION_NONE));
 		break;
 
     default:

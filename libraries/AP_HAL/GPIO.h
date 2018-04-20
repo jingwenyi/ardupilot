@@ -43,4 +43,10 @@ public:
 
     /* return true if USB cable is connected */
     virtual bool    usb_connected(void) = 0;
+
+	/* return true if imu data ready */
+	virtual bool imu_data_ready(void) = 0;
+
+	/* reset imu by hardware io */
+	virtual void imu_reset(bool level) = 0;
 };

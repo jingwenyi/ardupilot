@@ -72,6 +72,9 @@ SPIDesc SPIDeviceManager::device_table[] = {
 #if defined(PX4_SPIDEV_MPU)
     SPIDesc("mpu6000",      PX4_SPI_BUS_SENSORS, (spi_dev_e)PX4_SPIDEV_MPU, SPIDEV_MODE3, 500*KHZ, 8*MHZ),
 #endif
+#if defined(PX4_SPIDEV_ADIS)
+	SPIDesc("adis16375",	PX4_SPI_BUS_SENSORS, (spi_dev_e)PX4_SPIDEV_ADIS, SPIDEV_MODE3, 500*KHZ, 500*KHZ),
+#endif
 #if defined(PX4_SPIDEV_EXT_BARO)
     SPIDesc("ms5611_ext",   PX4_SPI_BUS_EXT, (spi_dev_e)PX4_SPIDEV_EXT_BARO, SPIDEV_MODE3, 20*MHZ, 20*MHZ),
 #endif

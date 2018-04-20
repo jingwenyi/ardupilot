@@ -112,6 +112,7 @@
 /* uavrs-v1 */
 #ifdef CONFIG_ARCH_BOARD_UAVRS_V1
 #define HAL_PX4_HAVE_PX4IO 0
+#define HAL_INS_ADIS16XXX_NAME "adis16375"
 #endif
 
 /* default values */

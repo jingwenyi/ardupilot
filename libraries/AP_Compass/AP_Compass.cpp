@@ -698,6 +698,11 @@ void Compass::_detect_backends(void)
                     AP_Compass_AK8963::name, false);
         break;
 
+    case AP_BoardConfig::PX4_BOARD_UAVRS:
+        ADD_BACKEND(DRIVER_HMC5883, AP_Compass_HMC5843::probe(*this, hal.spi->get_device(HAL_COMPASS_HMC5843_NAME),
+                                               false, ROTATION_ROLL_180_YAW_90),
+                     AP_Compass_HMC5843::name, false);
+		break;
     default:
         break;
     }

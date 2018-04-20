@@ -45,6 +45,11 @@ public:
 
     // used by UART code to avoid a hw bug in the AUAV-X2
     void set_usb_connected(void) { _usb_connected = true; }
+	/* return true if imu data ready */
+	bool imu_data_ready(void) override;
+
+	/* reset imu by hardware io */
+	void imu_reset(bool) override;
 
 private:
     int _led_fd = -1;

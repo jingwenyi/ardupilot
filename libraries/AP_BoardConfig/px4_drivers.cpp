@@ -510,12 +510,9 @@ void AP_BoardConfig::px4_autodetect(void)
     px4.board_type.set_and_notify(PX4_BOARD_AEROFC);
     hal.console->printf("Detected Aero FC\n");
 #elif defined(CONFIG_ARCH_BOARD_UAVRS_V1)
-    if (spi_check_register(HAL_INS_MPU60x0_NAME, MPUREG_WHOAMI, MPU_WHOAMI_MPU60X0) &&
-        spi_check_register(HAL_INS_LSM9DS0_A_NAME, LSMREG_WHOAMI, LSM_WHOAMI_LSM303D)) {
-        // UAVRS has LSM303D and MPUxxxx on external bus
-        px4.board_type.set_and_notify(PX4_BOARD_UAVRS);
-        hal.console->printf("Detected UAVRS\n");
-	}
+    // UAVRS has ADIS16375 and xxx on external bus
+    px4.board_type.set_and_notify(PX4_BOARD_UAVRS);
+    hal.console->printf("Detected UAVRS\n");
 #endif
 
 }

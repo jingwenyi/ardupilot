@@ -60,10 +60,10 @@ void PX4GPIO::init()
 #endif
 #else
 	#if !defined(CONFIG_ARCH_BOARD_UAVRS_V1)
-    _tone_alarm_fd = open(TONEALARM0_DEVICE_PATH, O_WRONLY);
-    if (_tone_alarm_fd == -1) {
-        AP_HAL::panic("Unable to open " TONEALARM0_DEVICE_PATH);
-    }
+    //_tone_alarm_fd = open(TONEALARM0_DEVICE_PATH, O_WRONLY);
+    //if (_tone_alarm_fd == -1) {
+    //    AP_HAL::panic("Unable to open " TONEALARM0_DEVICE_PATH);
+    //}
 	#endif
 	_gpio_fmu_fd = open(PX4FMU_DEVICE_PATH, 0);
     if (_gpio_fmu_fd == -1) {
@@ -311,7 +311,11 @@ bool PX4GPIO::usb_connected(void)
  */
 bool PX4GPIO::imu_data_ready(void)
 {
+#ifdef CONFIG_ARCH_BOARD_UAVRS_V1
     return stm32_gpioread(GPIO_IMU_DATA_READY_INPUT);
+#else
+    return false;
+#endif
 }
 
 /*
@@ -319,7 +323,9 @@ bool PX4GPIO::imu_data_ready(void)
  */
 void PX4GPIO::imu_reset(bool level)
 {
-    return stm32_gpiowrite(GPIO_IMU_DATA_RESET_OUTPUT, level);
+#ifdef CONFIG_ARCH_BOARD_UAVRS_V1
+    stm32_gpiowrite(GPIO_IMU_DATA_RESET_OUTPUT, level);  
+#endif
 }
 
 PX4DigitalSource::PX4DigitalSource(uint8_t v) :

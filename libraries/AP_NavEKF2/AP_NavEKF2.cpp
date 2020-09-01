@@ -202,7 +202,7 @@ const AP_Param::GroupInfo NavEKF2::var_info[] = {
     // @Description: This parameter controls the primary height sensor used by the EKF. If the selected option cannot be used, it will default to Baro as the primary height source. Setting 0 will use the baro altitude at all times. Setting 1 uses the range finder and is only available in combination with optical flow navigation (EK2_GPS_TYPE = 3). Setting 2 uses GPS. Setting 3 uses the range beacon data. NOTE - the EK2_RNG_USE_HGT parameter can be used to switch to range-finder when close to the ground.
     // @Values: 0:Use Baro, 1:Use Range Finder, 2:Use GPS, 3:Use Range Beacon
     // @User: Advanced
-    AP_GROUPINFO("ALT_SOURCE", 9, NavEKF2, _altSource, 0),
+    AP_GROUPINFO("ALT_SOURCE", 9, NavEKF2, _altSource, 2),
 
     // @Param: ALT_M_NSE
     // @DisplayName: Altitude measurement noise (m)
@@ -534,6 +534,34 @@ const AP_Param::GroupInfo NavEKF2::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("MAG_MASK", 48, NavEKF2, _magMask, 0),
 
+    // @Param: OGN_HGT_MASK
+    // @DisplayName: Bitmask control of EKF reference height correction
+    // @Description: When a height sensor other than GPS is used as the primary height source by the EKF, the position of the zero height datum is defined by that sensor and its frame of reference. If a GPS height measurement is also available, then the height of the WGS-84 height datum used by the EKF can be corrected so that the height returned by the getLLH() function is compensated for primary height sensor drift and change in datum over time. The first two bit positions control when the height datum will be corrected. Correction is performed using a Bayes filter and only operates when GPS quality permits. The third bit position controls where the corrections to the GPS reference datum are applied. Corrections can be applied to the local vertical position or to the reported EKF origin height (default).
+    // @Bitmask: 0:Correct when using Baro height,1:Correct when using range finder height,2:Apply corrections to local position
+    // @User: Advanced
+    // @RebootRequired: True
+    AP_GROUPINFO("OGN_HGT_MASK", 49, NavEKF2, _originHgtMode, 0),
+
+	// @Param: YAW_H_NSE
+    // @DisplayName: Yaw measurement noise (rad)
+    // @Description: This is the RMS value of noise in yaw measurements from the gps heading. Increasing it reduces the weighting on these measurements.
+    // @Range: 0.05 1.0
+    // @Increment: 0.05
+    // @User: Advanced
+    // @Units: gauss
+    AP_GROUPINFO("YAW_H_NSE", 50, NavEKF2, _yawGpsHeadNoise, 0.25f),
+
+    // @Param: YAW_HI_GATE
+    // @DisplayName: Yaw measurement gate size
+    // @Description: This sets the percentage number of standard deviations applied to the gps head yaw measurement innovation consistency check. Decreasing it makes it more likely that good measurements will be rejected. Increasing it makes it more likely that bad measurements will be accepted.
+    // @Range: 100 1000
+    // @Increment: 25
+    // @User: Advanced
+    AP_GROUPINFO("YAW_HI_GATE", 51, NavEKF2, _yawGHInnovGate, 500),
+
+    //0:16375  1:9250
+    AP_GROUPINFO("PRIMARY_IMU", 52, NavEKF2, _primary_imu_num, 1),
+
     AP_GROUPEND
 };
 
@@ -664,7 +692,7 @@ bool NavEKF2::InitialiseFilter(void)
         }
 
         // Set the primary initially to be the lowest index
-        primary = 0;
+        primary = _primary_imu_num;
     }
 
     // initialise the cores. We return success only if all cores
@@ -767,7 +795,8 @@ int8_t NavEKF2::getPrimaryCoreIndex(void) const
     if (!core) {
         return -1;
     }
-    return primary;
+    //return primary;
+    return _ahrs->get_ins().get_imu_id(primary);
 }
 
 // returns the index of the IMU of the primary core

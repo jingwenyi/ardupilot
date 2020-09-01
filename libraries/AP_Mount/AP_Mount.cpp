@@ -7,6 +7,8 @@
 #include "AP_Mount_Alexmos.h"
 #include "AP_Mount_SToRM32.h"
 #include "AP_Mount_SToRM32_serial.h"
+#include "AP_Mount_Z6ka7_Servo.h"
+
 
 const AP_Param::GroupInfo AP_Mount::var_info[] = {
     // @Param: _DEFLT_MODE
@@ -464,6 +466,8 @@ void AP_Mount::init(DataFlash_Class *dataflash, const AP_SerialManager& serial_m
         } else if (mount_type == Mount_Type_SToRM32_serial) {
             _backends[instance] = new AP_Mount_SToRM32_serial(*this, state[instance], instance);
             _num_instances++;
+        } else if(mount_type == Mount_Type_Z6ak7_servo){
+            _backends[instance] = new AP_Mount_Z6ka7_Servo(*this, state[instance], instance);
         }
 
         // init new instance

@@ -21,6 +21,12 @@ const AP_Param::GroupInfo AP_Mission::var_info[] = {
     // @Values: 0:Resume Mission, 1:Restart Mission
     // @User: Advanced
     AP_GROUPINFO("RESTART",  1, AP_Mission, _restart, AP_MISSION_RESTART_DEFAULT),
+    // @Param: SKIPCOMPLETE
+    // @DisplayName: skip complete waypoint
+    // @Description: skip complete waypoint
+    // @Values: 0:no skip, 1:skip
+    // @User: Advanced
+    AP_GROUPINFO("SKIPCOMPLETE",  2, AP_Mission, _skipcomplete, 0),
 
     AP_GROUPEND
 };
@@ -134,6 +140,20 @@ bool AP_Mission::starts_with_takeoff_cmd()
     }
     return true;
 }
+
+bool AP_Mission::end_with_rtl_cmd()
+{
+    Mission_Command cmd = {};
+    if (!get_next_nav_cmd(_cmd_total - 1, cmd)) {
+        return false;
+    }
+
+    if (cmd.id != MAV_CMD_NAV_RETURN_TO_LAUNCH) {
+        return false;
+    }
+    return true;
+}
+
 
 /// start_or_resume - if MIS_AUTORESTART=0 this will call resume(), otherwise it will call start()
 void AP_Mission::start_or_resume()
@@ -453,11 +473,15 @@ bool AP_Mission::read_cmd_from_storage(uint16_t index, Mission_Command& cmd) con
         if (b1 == 0) {
             cmd.id = _storage.read_uint16(pos_in_storage+1);
             cmd.p1 = _storage.read_uint16(pos_in_storage+3);
-            _storage.read_block(cmd.content.bytes, pos_in_storage+5, 10);
+            cmd.type = _storage.read_byte(pos_in_storage+5);
+            cmd.complete = _storage.read_byte(pos_in_storage+6);
+            _storage.read_block(cmd.content.bytes, pos_in_storage+7, 10);
         } else {
             cmd.id = b1;
             cmd.p1 = _storage.read_uint16(pos_in_storage+1);
-            _storage.read_block(cmd.content.bytes, pos_in_storage+3, 12);
+            cmd.type = _storage.read_byte(pos_in_storage+3);
+            cmd.complete = _storage.read_byte(pos_in_storage+4);
+            _storage.read_block(cmd.content.bytes, pos_in_storage+5, 12);
         }
 
         // set command's index to it's position in eeprom
@@ -484,13 +508,17 @@ bool AP_Mission::write_cmd_to_storage(uint16_t index, Mission_Command& cmd)
     if (cmd.id < 256) {
         _storage.write_byte(pos_in_storage, cmd.id);
         _storage.write_uint16(pos_in_storage+1, cmd.p1);
-        _storage.write_block(pos_in_storage+3, cmd.content.bytes, 12);
+        _storage.write_byte(pos_in_storage+3, cmd.type);
+        _storage.write_byte(pos_in_storage+4, cmd.complete);
+        _storage.write_block(pos_in_storage+5, cmd.content.bytes, 12);
     } else {
         // if the command ID is above 256 we store a 0 followed by the 16 bit command ID
         _storage.write_byte(pos_in_storage, 0);
         _storage.write_uint16(pos_in_storage+1, cmd.id);
         _storage.write_uint16(pos_in_storage+3, cmd.p1);
-        _storage.write_block(pos_in_storage+5, cmd.content.bytes, 10);
+        _storage.write_byte(pos_in_storage+5, cmd.type);
+        _storage.write_byte(pos_in_storage+6, cmd.complete);
+        _storage.write_block(pos_in_storage+7, cmd.content.bytes, 10);
     }
 
     // remember when the mission last changed
@@ -520,6 +548,8 @@ MAV_MISSION_RESULT AP_Mission::mavlink_int_to_mission_cmd(const mavlink_mission_
     // command's position in mission list and mavlink id
     cmd.index = packet.seq;
     cmd.id = packet.command;
+    cmd.type = packet.pointtype;
+    cmd.complete = 0;
     cmd.content.location.options = 0;
 
     // command specific conversions from mavlink packet to mission command
@@ -862,6 +892,8 @@ MAV_MISSION_RESULT AP_Mission::mavlink_to_mission_cmd(const mavlink_mission_item
     mav_cmd.frame = packet.frame;
     mav_cmd.current = packet.current;
     mav_cmd.autocontinue = packet.autocontinue;
+    mav_cmd.pointtype = packet.pointtype;
+    mav_cmd.complete = 0;
     
     /*
       the strategy for handling both MISSION_ITEM and MISSION_ITEM_INT
@@ -895,6 +927,59 @@ MAV_MISSION_RESULT AP_Mission::mavlink_to_mission_cmd(const mavlink_mission_item
     
     return ans;
 }
+
+MAV_MISSION_RESULT AP_Mission::mavlink_to_mission_cmd(const mavlink_mission_single_t& packet, AP_Mission::Mission_Command& cmd)
+{
+    mavlink_mission_item_int_t mav_cmd = {};
+
+    mav_cmd.param1 = packet.param1;
+    mav_cmd.param2 = packet.param2;
+    mav_cmd.param3 = packet.param3;
+    mav_cmd.param4 = packet.param4;
+    mav_cmd.z = packet.z;
+    mav_cmd.seq = packet.seq;
+    mav_cmd.command = packet.command;
+    mav_cmd.target_system = packet.target_system;
+    mav_cmd.target_component = packet.target_component;
+    mav_cmd.frame = packet.frame;
+    mav_cmd.current = packet.current;
+    mav_cmd.autocontinue = packet.autocontinue;
+    mav_cmd.pointtype = packet.pointtype;
+    mav_cmd.complete = 0;
+    
+    /*
+      the strategy for handling both MISSION_ITEM and MISSION_ITEM_INT
+      is to pass the lat/lng in MISSION_ITEM_INT straight through, and
+      for MISSION_ITEM multiply by 1e7 here. We need an exception for
+      any commands which use the x and y fields not as
+      latitude/longitude.
+     */
+    switch (packet.command) {
+    case MAV_CMD_DO_DIGICAM_CONTROL:
+    case MAV_CMD_DO_DIGICAM_CONFIGURE:
+        mav_cmd.x = packet.x;
+        mav_cmd.y = packet.y;
+        break;
+
+    default:
+        // all other commands use x and y as lat/lon. We need to
+        // multiply by 1e7 to convert to int32_t
+        if (!check_lat(packet.x)) {
+            return MAV_MISSION_INVALID_PARAM5_X;
+        }
+        if (!check_lng(packet.y)) {
+            return MAV_MISSION_INVALID_PARAM6_Y;
+        }
+        mav_cmd.x = packet.x * 1.0e7f;
+        mav_cmd.y = packet.y * 1.0e7f;
+        break;
+    }
+    
+    MAV_MISSION_RESULT ans = mavlink_int_to_mission_cmd(mav_cmd, cmd);
+    
+    return ans;
+}
+
 
 // converts a Mission_Command to mission_item_int and returns a mission_item
 bool AP_Mission::mission_cmd_to_mavlink(const AP_Mission::Mission_Command& cmd, mavlink_mission_item_t& packet)
@@ -1422,12 +1507,68 @@ bool AP_Mission::get_next_cmd(uint16_t start_index, Mission_Command& cmd, bool i
 
     // search until the end of the mission command list
     uint8_t max_loops = 64;
+    bool imcomplete_point = false;
     while(cmd_index < (unsigned)_cmd_total) {
         // load the next command
         if (!read_cmd_from_storage(cmd_index, temp_cmd)) {
             // this should never happen because of check above but just in case
             return false;
         }
+
+        if(_skipcomplete == true && temp_cmd.complete == true &&
+            (temp_cmd.type == MAV_POINT_NORMAL_BEFOREHAND_WAYPOINT || temp_cmd.type == MAV_POINT_NORMAL_TAKEPHOTO_WAYPOINT)){
+            imcomplete_point = true;
+            cmd_index++;
+            continue;
+        }
+
+        if(imcomplete_point && (temp_cmd.type == MAV_POINT_NORMAL_TAKEPHOTO_START || temp_cmd.type == MAV_POINT_NORMAL_TAKEPHOTO_STOP)){
+            cmd_index++;
+            continue;
+        }
+
+        if(imcomplete_point == true && temp_cmd.complete == false &&
+            (temp_cmd.type == MAV_POINT_NORMAL_BEFOREHAND_WAYPOINT || temp_cmd.type == MAV_POINT_NORMAL_TAKEPHOTO_WAYPOINT)){
+            if(temp_cmd.type == MAV_POINT_NORMAL_BEFOREHAND_WAYPOINT){
+                Mission_Command temp_cmd2;
+                if(!read_cmd_from_storage(cmd_index + 1, temp_cmd2)){
+                    return false;
+                }
+
+                if(temp_cmd2.type == MAV_POINT_NORMAL_BEFOREHAND_WAYPOINT){
+                    temp_cmd.complete = true;
+                    if(!replace_cmd(cmd_index, temp_cmd)){
+                        return false;
+                    }
+                    cmd_index++;
+                }
+            }else if(temp_cmd.type == MAV_POINT_NORMAL_TAKEPHOTO_WAYPOINT){
+                uint8_t n = 4;
+                while(n--){
+                    if(!read_cmd_from_storage(cmd_index - 1, temp_cmd)){
+                        return false;
+                    }
+
+                    cmd_index--;
+                    temp_cmd.complete = false;
+                    if(!replace_cmd(cmd_index, temp_cmd)){
+                        return false;
+                    }
+
+                    if(temp_cmd.type == MAV_POINT_NORMAL_BEFOREHAND_WAYPOINT){
+                        break;
+                    }
+                }
+            }
+
+            //temp_cmd need read ago
+            if (!read_cmd_from_storage(cmd_index, temp_cmd)) {
+                // this should never happen because of check above but just in case
+                return false;
+            }
+        }
+
+        imcomplete_point = false;
 
         // check for do-jump command
         if (temp_cmd.id == MAV_CMD_DO_JUMP) {

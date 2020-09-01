@@ -15,6 +15,7 @@ bool Copter::rtl_init(bool ignore_checks)
         wp_nav->wp_and_spline_init();
         rtl_build_path(!failsafe.terrain);
         rtl_climb_start();
+        camera.set_trigger_distance(0);
         return true;
     }else{
         return false;
@@ -460,6 +461,7 @@ void Copter::rtl_compute_return_target(bool terrain_following_allowed)
 
     // increase target to maximum of current altitude + climb_min and rtl altitude
     target_alt = MAX(target_alt, curr_alt + MAX(0, g.rtl_climb_min));
+    target_alt = MAX(target_alt, wp_highest);
     target_alt = MAX(target_alt, MAX(g.rtl_altitude, RTL_ALT_MIN));
 
     // reduce climb if close to return target

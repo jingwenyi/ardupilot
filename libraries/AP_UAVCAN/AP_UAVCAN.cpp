@@ -16,12 +16,14 @@
 #include <uavcan/equipment/gnss/Fix.hpp>
 #include <uavcan/equipment/gnss/Auxiliary.hpp>
 #include <uavcan/equipment/ahrs/MagneticFieldStrength.hpp>
+#include <uavcan/equipment/ahrs/MagneticFieldStrength2.hpp>
 #include <uavcan/equipment/air_data/StaticPressure.hpp>
 #include <uavcan/equipment/air_data/StaticTemperature.hpp>
 #include <uavcan/equipment/actuator/ArrayCommand.hpp>
 #include <uavcan/equipment/actuator/Command.hpp>
 #include <uavcan/equipment/actuator/Status.hpp>
 #include <uavcan/equipment/esc/RawCommand.hpp>
+#include <uavcan/equipment/indication/RGBLed.hpp>
 
 #include <AP_BoardConfig/AP_BoardConfig.h>
 
@@ -193,6 +195,33 @@ static void magnetic_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::a
     }
 }
 
+uavcan::Subscriber<uavcan::equipment::ahrs::MagneticFieldStrength2> *magnetic2;
+static void magnetic_cb_2(const uavcan::ReceivedDataStructure<uavcan::equipment::ahrs::MagneticFieldStrength2>& msg)
+{
+    if (hal.can_mgr != nullptr) {
+        AP_UAVCAN *ap_uavcan = hal.can_mgr->get_UAVCAN();
+        if (ap_uavcan != nullptr) {
+			#if 0
+			printf("magnetic call back! getSrcNodeID[%d], magnetic_field_ga x[%d] y[%d] z[%d]\n", 
+						msg.getSrcNodeID().get(), 
+						msg.magnetic_field_ga_x, 
+						msg.magnetic_field_ga_y, 
+						msg.magnetic_field_ga_z);
+			#endif
+			AP_UAVCAN::Mag_Info *state = ap_uavcan->find_mag_node(msg.getSrcNodeID().get());
+            if (state != nullptr) {
+                state->mag_vector.x = msg.magnetic_field_ga_x;
+                state->mag_vector.y = msg.magnetic_field_ga_y;
+                state->mag_vector.z = msg.magnetic_field_ga_z;
+
+				//printf("magnetic call back! state->mag_vector x[%.1f] y[%.1f] z[%.1f]\n", state->mag_vector.x, state->mag_vector.y, state->mag_vector.z);
+                // after all is filled, update all listeners with new data
+                ap_uavcan->update_mag_state(msg.getSrcNodeID().get());
+            }
+        }
+    }
+}
+		
 static uavcan::Subscriber<uavcan::equipment::air_data::StaticPressure> *air_data_sp;
 static void air_data_sp_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::air_data::StaticPressure>& msg)
 {
@@ -230,6 +259,7 @@ static void air_data_st_cb(const uavcan::ReceivedDataStructure<uavcan::equipment
 // publisher interfaces
 static uavcan::Publisher<uavcan::equipment::actuator::ArrayCommand> *act_out_array;
 static uavcan::Publisher<uavcan::equipment::esc::RawCommand> *esc_raw;
+static uavcan::Publisher<uavcan::equipment::indication::RGBLed> *rgbled_out;
 
 AP_UAVCAN::AP_UAVCAN() :
     _initialized(false), _rco_armed(false), _rco_safety(false), _rc_out_sem(nullptr), _node_allocator(
@@ -326,6 +356,13 @@ bool AP_UAVCAN::try_init(void)
                         debug_uavcan(1, "UAVCAN Compass subscriber start problem\n\r");
                         return false;
                     }
+					
+                    magnetic2 = new uavcan::Subscriber<uavcan::equipment::ahrs::MagneticFieldStrength2>(*node);
+                    const int magnetic_start_res_2 = magnetic2->start(magnetic_cb_2);
+                    if (magnetic_start_res_2 < 0) {
+                        debug_uavcan(1, "UAVCAN Compass for multiple mags subscriber start problem\n\r");
+                        return false;
+                    }
 
                     air_data_sp = new uavcan::Subscriber<uavcan::equipment::air_data::StaticPressure>(*node);
                     const int air_data_sp_start_res = air_data_sp->start(air_data_sp_cb);
@@ -348,6 +385,10 @@ bool AP_UAVCAN::try_init(void)
                     esc_raw = new uavcan::Publisher<uavcan::equipment::esc::RawCommand>(*node);
                     esc_raw->setTxTimeout(uavcan::MonotonicDuration::fromMSec(20));
                     esc_raw->setPriority(uavcan::TransferPriority::OneLowerThanHighest);
+
+                    rgbled_out = new uavcan::Publisher<uavcan::equipment::indication::RGBLed>(*node);
+                    rgbled_out->setTxTimeout(uavcan::MonotonicDuration::fromMSec(20));
+                    rgbled_out->setPriority(uavcan::TransferPriority::OneLowerThanHighest);
 
                     /*
                      * Informing other nodes that we're ready to work.
@@ -384,6 +425,23 @@ bool AP_UAVCAN::rc_out_sem_take()
 void AP_UAVCAN::rc_out_sem_give()
 {
     _rc_out_sem->give();
+}
+
+void AP_UAVCAN::do_cyclic_rgbled(uint8_t red, uint8_t green, uint8_t blue)
+{
+    if (_initialized) {
+        bool repeat_send;
+        do {
+            repeat_send = false;
+            uavcan::equipment::indication::RGBLed msg;
+            msg.red = red;
+            msg.green = green;
+            msg.blue = blue;
+            //printf("do_cyclic_rgbled r[%d], g[%d], b[%d]\n", msg.red, msg.green, msg.blue);
+            if(rgbled_out != nullptr)
+                rgbled_out->broadcast(msg);
+        } while (repeat_send);
+    }
 }
 
 void AP_UAVCAN::do_cyclic(void)

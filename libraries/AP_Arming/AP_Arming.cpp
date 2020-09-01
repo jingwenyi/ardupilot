@@ -170,6 +170,18 @@ bool AP_Arming::ins_checks(bool report)
     if ((checks_to_perform & ARMING_CHECK_ALL) ||
         (checks_to_perform & ARMING_CHECK_INS)) {
         const AP_InertialSensor &ins = ahrs.get_ins();
+        if(ins.get_accel_count() != 2 || ins.get_gyro_count() != 2){
+             if (report) {
+                GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "PreArm: ins accel count != 2 or gyro count != 2");
+            }
+            return false;
+        }
+        if(ins.get_imu_id(0) != AP_InertialSensor_Backend::DEVTYPE_ADIS16375){
+            if (report) {
+                GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "PreArm: imu0 is not adi16375");
+            }
+            return false;
+        }
         if (!ins.get_gyro_health_all()) {
             if (report) {
                 GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "PreArm: Gyros not healthy");
@@ -382,18 +394,35 @@ bool AP_Arming::gps_checks(bool report)
             }
             return false;
         }
+    }
 
-        // check AHRS and GPS are within 10m of each other
-        Location gps_loc = ahrs.get_gps().location();
-        Location ahrs_loc;
-        if (ahrs.get_position(ahrs_loc)) {
-            float distance = location_3d_diff_NED(gps_loc, ahrs_loc).length();
-            if (distance > AP_ARMING_AHRS_GPS_ERROR_MAX) {
-                if (report) {
-                    GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "PreArm: GPS and AHRS differ by %4.1fm", (double)distance);
-                }
-                return false;
+    if ((checks_to_perform & ARMING_CHECK_ALL) || (checks_to_perform & ARMING_CHECK_GPS)) {
+
+        // primary gps is rtk board?
+        if (gps.get_gps_type() != AP_GPS_Backend::DEVTYPE_OEM719) {
+            if (report) {
+                GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "PreArm: primary gps is not rtk board");
             }
+            return false;
+        }
+
+        if(gps.get_gps_type() == AP_GPS_Backend::DEVTYPE_OEM719 && 
+                    gps.heading_status() != AP_GPS::GPS_OK_FIX_3D_RTK_FIXED){
+            if (report) {
+                GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "PreArm: rtk heading is not fix");
+            }
+            return false;
+        }
+    }
+
+    if ((checks_to_perform & ARMING_CHECK_ALL) || (checks_to_perform & ARMING_CHECK_GPS)) {
+
+        uint8_t all_gps_ok = gps.all_gps_status_is_ok();
+        if (all_gps_ok != AP_GPS::GPS_ALL_OK) {
+            if (report) {
+                GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "PreArm: GPS %d need 3d fix", all_gps_ok);
+            }
+            return false;
         }
     }
 
@@ -490,15 +519,13 @@ bool AP_Arming::pre_arm_checks(bool report)
     }
 #endif
 
-    return hardware_safety_check(report)
-        &  barometer_checks(report)
+    return barometer_checks(report)
         &  ins_checks(report)
         &  compass_checks(report)
         &  gps_checks(report)
         &  battery_checks(report)
         &  logging_checks(report)
-        &  manual_transmitter_checks(report)
-        &  board_voltage_checks(report);
+        &  manual_transmitter_checks(report);
 }
 
 bool AP_Arming::arm_checks(uint8_t method)
@@ -575,3 +602,14 @@ AP_Arming::ArmingRequired AP_Arming::arming_required()
 {
     return (AP_Arming::ArmingRequired)require.get();
 }
+
+bool AP_Arming::ppk_checks(bool report)
+{
+	if(!DataFlash_Class::instance()->ppk_status) {
+		if (report) {
+			GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "PreArm: ppk is idle!");
+		}
+		return false;
+	}
+	return true;
+} 

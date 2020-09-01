@@ -69,6 +69,17 @@ namespace PX4 {
 #define KHZ (1000U)
 
 SPIDesc SPIDeviceManager::device_table[] = {
+#if CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_UAVRS_V1
+#if defined(PX4_SPIDEV_ADIS)
+	SPIDesc("adis16375",	PX4_SPI_BUS_ADIS, (spi_dev_e)PX4_SPIDEV_ADIS, SPIDEV_MODE3, 500*KHZ, 20*MHZ),
+#endif
+#if defined(PX4_SPIDEV_MPU_9250)
+	SPIDesc("mpu9250",		PX4_SPI_BUS_MPU_9250, (spi_dev_e)PX4_SPIDEV_MPU_9250, SPIDEV_MODE3, 1*MHZ, 8*MHZ),
+#endif
+#if defined(PX4_SPIDEV_BARO_MS5611)
+    SPIDesc("ms5611",       PX4_SPI_BUS_BARO_MS5611, (spi_dev_e)PX4_SPIDEV_BARO_MS5611, SPIDEV_MODE3, 20*MHZ, 20*MHZ),
+#endif
+#endif
 #if defined(PX4_SPIDEV_MPU)
     SPIDesc("mpu6000",      PX4_SPI_BUS_SENSORS, (spi_dev_e)PX4_SPIDEV_MPU, SPIDEV_MODE3, 500*KHZ, 8*MHZ),
 #endif

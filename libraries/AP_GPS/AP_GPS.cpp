@@ -66,7 +66,7 @@ const AP_Param::GroupInfo AP_GPS::var_info[] = {
     // @Values: 0:None,1:AUTO,2:uBlox,3:MTK,4:MTK19,5:NMEA,6:SiRF,7:HIL,8:SwiftNav,9:UAVCAN,10:SBF,11:GSOF,12:QURT,13:ERB,14:MAV,15:NOVA
     // @RebootRequired: True
     // @User: Advanced
-    AP_GROUPINFO("TYPE",    0, AP_GPS, _type[0], 1),
+    AP_GROUPINFO("TYPE",    0, AP_GPS, _type[0], 15),
 
     // @Param: TYPE2
     // @DisplayName: 2nd GPS type
@@ -74,7 +74,7 @@ const AP_Param::GroupInfo AP_GPS::var_info[] = {
     // @Values: 0:None,1:AUTO,2:uBlox,3:MTK,4:MTK19,5:NMEA,6:SiRF,7:HIL,8:SwiftNav,9:UAVCAN,10:SBF,11:GSOF,12:QURT,13:ERB,14:MAV,15:NOVA
     // @RebootRequired: True
     // @User: Advanced
-    AP_GROUPINFO("TYPE2",   1, AP_GPS, _type[1], 0),
+    AP_GROUPINFO("TYPE2",   1, AP_GPS, _type[1], 1),
 
     // @Param: NAVFILTER
     // @DisplayName: Navigation filter setting
@@ -252,6 +252,13 @@ const AP_Param::GroupInfo AP_GPS::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("BLEND_TC", 21, AP_GPS, _blend_tc, 10.0f),
 
+    // @Param: HEAD_OFFSET
+    // @DisplayName: Rtk Gps heading offset
+    // @Description: Offset of rtk gps heading, rotated depend on body frame.
+    // @Units: degrees
+    // @Range: -180.0 180.0
+    // @User: Advanced
+    AP_GROUPINFO("HEAD_OFFSET", 22, AP_GPS, _head_offset, 0.0f),
     AP_GROUPEND
 };
 
@@ -274,6 +281,15 @@ void AP_GPS::init(DataFlash_Class *dataflash, const AP_SerialManager& serial_man
 
     // Initialise class variables used to do GPS blending
     _omega_lpf = 1.0f / constrain_float(_blend_tc, 5.0f, 30.0f);
+
+    // prep the state instance fields
+    for (uint8_t i = 0; i < GPS_MAX_INSTANCES; i++) {
+        state[i].instance = i;
+    }
+
+    for (uint8_t i = 0; i < GPS_MAX_RECEIVERS; i++) {
+        gps_type[i] = -1;
+    }
 
     // sanity check update rate
     for (uint8_t i=0; i<GPS_MAX_RECEIVERS; i++) {
@@ -322,6 +338,14 @@ bool AP_GPS::vertical_accuracy(uint8_t instance, float &vacc) const
     return false;
 }
 
+bool AP_GPS::heading_accuracy(uint8_t instance, float &hacc) const
+{
+    if (state[instance].have_heading_accuracy) {
+        hacc = state[instance].heading_accuracy;
+        return true;
+    }
+    return false;
+}
 
 /**
    convert GPS week and milliseconds to unix epoch in milliseconds
@@ -554,6 +578,7 @@ found_gps:
         drivers[instance] = new_gps;
         timing[instance].last_message_time_ms = now;
         new_gps->broadcast_gps_type();
+        gps_type[instance] = new_gps->get_gps_type();
     }
 }
 
@@ -639,85 +664,42 @@ void AP_GPS::update(void)
         }
     }
 
-    // if blending is requested, attempt to calculate weighting for each GPS
-    if (_auto_switch == 2) {
-        _output_is_blended = calc_blend_weights();
-        // adjust blend health counter
-        if (!_output_is_blended) {
-            _blend_health_counter = MIN(_blend_health_counter+BLEND_COUNTER_FAILURE_INCREMENT, 100);
-        } else if (_blend_health_counter > 0) {
-            _blend_health_counter--;
-        }
-        // stop blending if unhealthy
-        if (_blend_health_counter >= 50) {
-            _output_is_blended = false;
-        }
-    } else {
-        _output_is_blended = false;
-        _blend_health_counter = 0;
-    }
-
-    if (_output_is_blended) {
-        // Use the weighting to calculate blended GPS states
-        calc_blended_state();
-        // set primary to the virtual instance
-        primary_instance = GPS_BLENDED_INSTANCE;
-    } else {
-        // use switch logic to find best GPS
-        uint32_t now = AP_HAL::millis();
-        if (_auto_switch >= 1) {
-            // handling switching away from blended GPS
-            if (primary_instance == GPS_BLENDED_INSTANCE) {
-                primary_instance = 0;
-                for (uint8_t i=1; i<GPS_MAX_RECEIVERS; i++) {
-                    // choose GPS with highest state or higher number of satellites
-                    if ((state[i].status > state[primary_instance].status) ||
-                        ((state[i].status == state[primary_instance].status) && (state[i].num_sats > state[primary_instance].num_sats))) {
-                        primary_instance = i;
-                        _last_instance_swap_ms = now;
-                    }
-                }
-            } else {
-                // handle switch between real GPSs
-                for (uint8_t i=0; i<GPS_MAX_RECEIVERS; i++) {
-                    if (i == primary_instance) {
-                        continue;
-                    }
-                    if (state[i].status > state[primary_instance].status) {
-                        // we have a higher status lock, or primary is set to the blended GPS, change GPS
-                        primary_instance = i;
-                        _last_instance_swap_ms = now;
-                        continue;
-                    }
-
-                    bool another_gps_has_1_or_more_sats = (state[i].num_sats >= state[primary_instance].num_sats + 1);
-
-                    if (state[i].status == state[primary_instance].status && another_gps_has_1_or_more_sats) {
-
-                        bool another_gps_has_2_or_more_sats = (state[i].num_sats >= state[primary_instance].num_sats + 2);
-
-                        if ((another_gps_has_1_or_more_sats && (now - _last_instance_swap_ms) >= 20000) ||
-                            (another_gps_has_2_or_more_sats && (now - _last_instance_swap_ms) >= 5000)) {
-                            // this GPS has more satellites than the
-                            // current primary, switch primary. Once we switch we will
-                            // then tend to stick to the new GPS as primary. We don't
-                            // want to switch too often as it will look like a
-                            // position shift to the controllers.
-                            primary_instance = i;
-                            _last_instance_swap_ms = now;
-                        }
-                    }
-                }
+    uint32_t now = AP_HAL::millis();
+    static uint32_t    rtk_ok_start_ms;
+    for (uint8_t i=0; i<GPS_MAX_RECEIVERS; i++) {
+        if(gps_type[i] == AP_GPS_Backend::DEVTYPE_OEM719 && state[i].status >= GPS_OK_FIX_3D_RTK_FIXED && primary_instance != i){
+            // we have a higher status lock, or primary is set to the blended GPS, change GPS
+            if(rtk_ok_start_ms == 0){
+                rtk_ok_start_ms = AP_HAL::millis();
+            }else if(AP_HAL::millis() - rtk_ok_start_ms > 50*1000){
+                primary_instance = i;
+                _last_instance_swap_ms = now;
+                GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "gps use oem719 rtk board");
             }
-        } else {
-            // AUTO_SWITCH is 0 so no switching of GPSs
-            primary_instance = 0;
         }
 
-        // copy the primary instance to the blended instance in case it is enabled later
-        state[GPS_BLENDED_INSTANCE] = state[primary_instance];
-        _blended_antenna_offset = _antenna_offset[primary_instance];
+        if(gps_type[i] == AP_GPS_Backend::DEVTYPE_OEM719 && state[i].status < GPS_OK_FIX_3D_RTK_FIXED){
+            rtk_ok_start_ms = 0;
+        }
+
+        if(primary_instance != i && state[primary_instance].status < GPS_OK_FIX_3D && state[i].status >= GPS_OK_FIX_3D){
+            // we have a higher status lock, or primary is set to the blended GPS, change GPS
+            primary_instance = i;
+            _last_instance_swap_ms = now;
+            if(gps_type[i] == AP_GPS_Backend::DEVTYPE_OEM719){
+                GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "gps use oem719 rtk board");
+            }else if(gps_type[i] == AP_GPS_Backend::DEVTYPE_BLOX_M8N){
+                rtk_ok_start_ms = 0;
+                GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "gps use ublox m8n");
+            }else{
+                 GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "gps use do not know");
+            }
+        }
     }
+
+     // copy the primary instance to the blended instance in case it is enabled later
+     state[GPS_BLENDED_INSTANCE] = state[primary_instance];
+     _blended_antenna_offset = _antenna_offset[primary_instance];
 
     // update notify with gps status. We always base this on the primary_instance
     AP_Notify::flags.gps_status = state[primary_instance].status;
@@ -914,6 +896,16 @@ uint8_t AP_GPS::first_unconfigured_gps(void) const
         }
     }
     return GPS_ALL_CONFIGURED;
+}
+
+uint8_t AP_GPS::all_gps_status_is_ok(void) const
+{
+    for(int i = 0; i < GPS_MAX_RECEIVERS; i++){
+        if(gps_type[i] != -1 && state[i].status < GPS_OK_FIX_3D){
+            return gps_type[i];
+        }
+    }
+    return GPS_ALL_OK;
 }
 
 void AP_GPS::broadcast_first_configuration_failure_reason(void) const

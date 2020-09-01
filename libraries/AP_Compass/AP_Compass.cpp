@@ -27,7 +27,7 @@
 
 extern AP_HAL::HAL& hal;
 
-#if APM_BUILD_TYPE(APM_BUILD_ArduCopter) || APM_BUILD_TYPE(APM_BUILD_ArduSub)
+#if APM_BUILD_TYPE(APM_BUILD_ArduSub)
 #define COMPASS_LEARN_DEFAULT Compass::LEARN_NONE
 #else
 #define COMPASS_LEARN_DEFAULT Compass::LEARN_INTERNAL
@@ -139,7 +139,7 @@ const AP_Param::GroupInfo Compass::var_info[] = {
     // @Description: Configure compass so it is attached externally. This is auto-detected on PX4 and Pixhawk. Set to 1 if the compass is externally connected. When externally connected the COMPASS_ORIENT option operates independently of the AHRS_ORIENTATION board orientation option. If set to 0 or 1 then auto-detection by bus connection can override the value. If set to 2 then auto-detection will be disabled.
     // @Values: 0:Internal,1:External,2:ForcedExternal
     // @User: Advanced
-    AP_GROUPINFO("EXTERNAL", 9, Compass, _state[0].external, 0),
+    AP_GROUPINFO("EXTERNAL", 9, Compass, _state[0].external, 1),
 
     // @Param: OFS2_X
     // @DisplayName: Compass2 offsets in milligauss on the X axis
@@ -271,7 +271,7 @@ const AP_Param::GroupInfo Compass::var_info[] = {
     // @Description: Enable or disable the second compass for determining heading.
     // @Values: 0:Disabled,1:Enabled
     // @User: Advanced
-    AP_GROUPINFO("USE2",    18, Compass, _state[1].use_for_yaw, 1),
+    AP_GROUPINFO("USE2",    18, Compass, _state[1].use_for_yaw, 0),
 
     // @Param: ORIENT2
     // @DisplayName: Compass2 orientation
@@ -292,7 +292,7 @@ const AP_Param::GroupInfo Compass::var_info[] = {
     // @Description: Enable or disable the third compass for determining heading.
     // @Values: 0:Disabled,1:Enabled
     // @User: Advanced
-    AP_GROUPINFO("USE3",    21, Compass, _state[2].use_for_yaw, 1),
+    AP_GROUPINFO("USE3",    21, Compass, _state[2].use_for_yaw, 0),
 
     // @Param: ORIENT3
     // @DisplayName: Compass3 orientation
@@ -711,6 +711,8 @@ void Compass::_detect_backends(void)
                     AP_Compass_AK8963::name, false);
         break;
 
+    case AP_BoardConfig::PX4_BOARD_UAVRS:
+		break;
     default:
         break;
     }
@@ -808,11 +810,12 @@ void Compass::_detect_backends(void)
     if (_driver_enabled(DRIVER_UAVCAN)) {
         bool added;
         do {
+			printf("Creating AP_Compass_UAVCAN\n\r");
             added = _add_backend(new AP_Compass_UAVCAN(*this), "UAVCAN", true);
             if (_backend_count == COMPASS_MAX_BACKEND || _compass_count == COMPASS_MAX_INSTANCES) {
                 return;
             }
-        } while (added);
+        } while (!added);
     }
 #endif
 
@@ -942,7 +945,7 @@ bool
 Compass::use_for_yaw(void) const
 {
     uint8_t prim = get_primary();
-    return healthy(prim) && use_for_yaw(prim);
+    return use_for_yaw(prim);
 }
 
 /// return true if the specified compass can be used for yaw calculations

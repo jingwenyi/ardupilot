@@ -44,10 +44,12 @@ const AP_Param::GroupInfo DataFlash_Class::var_info[] = {
     // @User: Standard
     AP_GROUPINFO("_FILE_DSRMROT",  4, DataFlash_Class, _params.file_disarm_rot,       0),
 
+    AP_GROUPINFO("_SAVE_TYPE", 5, DataFlash_Class, _params.save_type, 1),
+
     AP_GROUPEND
 };
 
-void DataFlash_Class::Init(const struct LogStructure *structures, uint8_t num_types)
+void DataFlash_Class::Init(const struct LogStructure *structures, uint8_t num_types, const AP_SerialManager& serial_manager)
 {
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
     validate_structures(structures, num_types);
@@ -69,7 +71,7 @@ void DataFlash_Class::Init(const struct LogStructure *structures, uint8_t num_ty
 #if HAL_OS_POSIX_IO
             backends[_next_backend] = new DataFlash_File(*this,
                                                          message_writer,
-                                                         HAL_BOARD_LOG_DIRECTORY);
+                                                         HAL_BOARD_LOG_DIRECTORY, HAL_BOARD_RAW_DATA_DIRECTORY, HAL_BOARD_POS_DATA_DIRECTORY);
 #endif
         }
         if (backends[_next_backend] == nullptr) {
@@ -102,7 +104,7 @@ void DataFlash_Class::Init(const struct LogStructure *structures, uint8_t num_ty
 #endif
 
     for (uint8_t i=0; i<_next_backend; i++) {
-        backends[i]->Init();
+        backends[i]->Init(serial_manager);
     }
 }
 
@@ -299,6 +301,34 @@ void DataFlash_Class::StartUnstartedLogging(void)
     }
 }
 
+bool DataFlash_Class::should_raw_data(const uint32_t mask) const
+{
+    if (!vehicle_is_armed()) {
+        return false;
+    }
+    if (in_raw_data_download()) {
+        return false;
+    }
+    if (_next_backend == 0) {
+        return false;
+    }
+    return true;
+}
+
+bool DataFlash_Class::should_pos_data(const uint32_t mask) const
+{
+    if (!vehicle_is_armed()) {
+        return false;
+    }
+    if (in_pos_data_download()) {
+        return false;
+    }
+    if (_next_backend == 0) {
+        return false;
+    }
+    return true;
+}
+
 #define FOR_EACH_BACKEND(methodcall)              \
     do {                                          \
         for (uint8_t i=0; i<_next_backend; i++) { \
@@ -344,10 +374,28 @@ void DataFlash_Class::WritePrioritisedBlock(const void *pBuffer, uint16_t size, 
     FOR_EACH_BACKEND(WritePrioritisedBlock(pBuffer, size, is_critical));
 }
 
+void DataFlash_Class::WriteRawData(const void *pBuffer, uint16_t size) {
+    FOR_EACH_BACKEND(WriteRawData(pBuffer, size));
+}
+
+void DataFlash_Class::WritePosData(const void *pBuffer, uint16_t size) {
+    FOR_EACH_BACKEND(WritePosData(pBuffer, size));
+}
+
+
 // change me to "DoTimeConsumingPreparations"?
 void DataFlash_Class::EraseAll() {
     FOR_EACH_BACKEND(EraseAll());
 }
+
+void DataFlash_Class::EraseAllRawData() {
+    FOR_EACH_BACKEND(EraseAllRawData());
+}
+
+void DataFlash_Class::EraseAllPosData() {
+    FOR_EACH_BACKEND(EraseAllPosData());
+}
+
 // change me to "LoggingAvailable"?
 bool DataFlash_Class::CardInserted(void) {
     for (uint8_t i=0; i< _next_backend; i++) {
@@ -376,6 +424,16 @@ void DataFlash_Class::StopLogging()
     FOR_EACH_BACKEND(stop_logging());
 }
 
+void DataFlash_Class::StopRawData()
+{
+    FOR_EACH_BACKEND(stop_raw_data());
+}
+
+void DataFlash_Class::StopPosData()
+{
+    FOR_EACH_BACKEND(stop_pos_data());
+}
+
 uint16_t DataFlash_Class::find_last_log() const {
     if (_next_backend == 0) {
         return 0;
@@ -388,6 +446,21 @@ void DataFlash_Class::get_log_boundaries(uint16_t log_num, uint16_t & start_page
     }
     backends[0]->get_log_boundaries(log_num, start_page, end_page);
 }
+
+void DataFlash_Class::get_raw_data_boundaries(uint16_t raw_num, uint16_t & start_page, uint16_t & end_page) {
+    if (_next_backend == 0) {
+        return;
+    }
+    backends[0]->get_raw_data_boundaries(raw_num, start_page, end_page);
+}
+
+void DataFlash_Class::get_pos_data_boundaries(uint16_t pos_num, uint16_t & start_page, uint16_t & end_page) {
+    if (_next_backend == 0) {
+        return;
+    }
+    backends[0]->get_pos_data_boundaries(pos_num, start_page, end_page);
+}
+
 void DataFlash_Class::get_log_info(uint16_t log_num, uint32_t &size, uint32_t &time_utc) {
     if (_next_backend == 0) {
         return;
@@ -400,11 +473,54 @@ int16_t DataFlash_Class::get_log_data(uint16_t log_num, uint16_t page, uint32_t 
     }
     return backends[0]->get_log_data(log_num, page, offset, len, data);
 }
+
+int16_t DataFlash_Class::get_raw_data(uint16_t raw_num, uint16_t page, uint32_t offset, uint16_t len, uint8_t *data) {
+    if (_next_backend == 0) {
+        return 0;
+    }
+    return backends[0]->get_raw_data(raw_num, page, offset, len, data);
+}
+
+int16_t DataFlash_Class::get_pos_data(uint16_t pos_num, uint16_t page, uint32_t offset, uint16_t len, uint8_t *data) {
+    if (_next_backend == 0) {
+        return 0;
+    }
+    return backends[0]->get_pos_data(pos_num, page, offset, len, data);
+}
+
 uint16_t DataFlash_Class::get_num_logs(void) {
     if (_next_backend == 0) {
         return 0;
     }
     return backends[0]->get_num_logs();
+}
+
+uint16_t DataFlash_Class::get_num_raw_data(void) {
+    if (_next_backend == 0) {
+        return 0;
+    }
+    return backends[0]->get_num_raw_data();
+}
+
+uint16_t DataFlash_Class::get_num_pos_data(void) {
+    if (_next_backend == 0) {
+        return 0;
+    }
+    return backends[0]->get_num_pos_data();
+}
+
+void DataFlash_Class::get_raw_data_info(uint16_t raw_data_num, uint32_t &size, uint32_t &time_utc) {
+    if (_next_backend == 0) {
+        return;
+    }
+    backends[0]->get_raw_data_info(raw_data_num, size, time_utc);
+}
+
+void DataFlash_Class::get_pos_data_info(uint16_t pos_data_num, uint32_t &size, uint32_t &time_utc) {
+    if (_next_backend == 0) {
+        return;
+    }
+    backends[0]->get_pos_data_info(pos_data_num, size, time_utc);
 }
 
 void DataFlash_Class::LogReadProcess(uint16_t log_num,

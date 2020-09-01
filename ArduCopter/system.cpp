@@ -165,7 +165,7 @@ void Copter::init_ardupilot()
 #endif
 
 #if LOGGING_ENABLED == ENABLED
-    log_init();
+    log_init(serial_manager);
 #endif
 
     // update motor interlock state

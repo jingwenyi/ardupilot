@@ -10,6 +10,7 @@
 #include <AP_Motors/AP_Motors.h>
 #include <AC_AttitudeControl/AC_AttitudeControl.h>
 #include <AC_AttitudeControl/AC_PosControl.h>
+#include <GCS_MAVLink/GCS.h>
 
 #include "DataFlash.h"
 #include "DataFlash_SITL.h"
@@ -673,6 +674,8 @@ void DataFlash_Class::Log_Write_GPS(const AP_GPS &gps, uint8_t i, uint64_t time_
         vacc          : (uint16_t)MIN((vacc*100), UINT16_MAX),
         sacc          : (uint16_t)MIN((sacc*100), UINT16_MAX),
         have_vv       : (uint8_t)gps.have_vertical_velocity(i),
+        heading_status:(uint8_t)gps.heading_status(i),
+        hdg           : gps.get_heading(i),
         sample_ms     : gps.last_message_time_ms(i)
     };
     WriteBlock(&pkt2, sizeof(pkt2));
@@ -1012,12 +1015,18 @@ bool DataFlash_Backend::Log_Write_Message(const char *message)
 void DataFlash_Class::Log_Write_Power(void)
 {
 #if CONFIG_HAL_BOARD == HAL_BOARD_PX4
+    uint8_t safety_and_armed = uint8_t(hal.util->safety_switch_state());
+    if (hal.util->get_soft_armed()) {
+        // encode armed state in bit 3
+        safety_and_armed |= 1U<<2;
+    }
     struct log_POWR pkt = {
         LOG_PACKET_HEADER_INIT(LOG_POWR_MSG),
         time_us : AP_HAL::micros64(),
         Vcc     : hal.analogin->board_voltage(),
         Vservo  : hal.analogin->servorail_voltage(),
-        flags   : hal.analogin->power_status_flags()
+        flags   : hal.analogin->power_status_flags(),
+        safety_and_arm : safety_and_armed
     };
     WriteBlock(&pkt, sizeof(pkt));
 #endif
@@ -1855,6 +1864,40 @@ void DataFlash_Class::Log_Write_CameraInfo(enum LogMessages msg, const AP_AHRS &
     WriteCriticalBlock(&pkt, sizeof(pkt));
 }
 
+// Write a Pos packet
+void DataFlash_Class::Pos_Write_CameraInfo(enum LogMessages msg, const AP_AHRS &ahrs, const AP_GPS &gps, const Location &current_loc)
+{
+    int32_t altitude, altitude_rel, altitude_gps;
+    if (current_loc.flags.relative_alt) {
+        altitude = current_loc.alt+ahrs.get_home().alt;
+        altitude_rel = current_loc.alt;
+    } else {
+        altitude = current_loc.alt;
+        altitude_rel = current_loc.alt - ahrs.get_home().alt;
+    }
+    if (gps.status() >= AP_GPS::GPS_OK_FIX_3D) {
+        altitude_gps = gps.location().alt;
+    } else {
+        altitude_gps = 0;
+    }
+
+    struct log_Camera pkt = {
+        LOG_PACKET_HEADER_INIT(static_cast<uint8_t>(msg)),
+        time_us     : AP_HAL::micros64(),
+        gps_time    : gps.time_week_ms(),
+        gps_week    : gps.time_week(),
+        latitude    : current_loc.lat,
+        longitude   : current_loc.lng,
+        altitude    : altitude,
+        altitude_rel: altitude_rel,
+        altitude_gps: altitude_gps,
+        roll        : (int16_t)ahrs.roll_sensor,
+        pitch       : (int16_t)ahrs.pitch_sensor,
+        yaw         : (uint16_t)ahrs.yaw_sensor
+    };
+    WritePosData(&pkt, sizeof(pkt));
+}
+
 // Write a Camera packet
 void DataFlash_Class::Log_Write_Camera(const AP_AHRS &ahrs, const AP_GPS &gps, const Location &current_loc)
 {
@@ -1946,6 +1989,33 @@ void DataFlash_Class::Log_Write_Current(const AP_BattMonitor &battery)
         }
         WriteBlock(&pkt, sizeof(pkt));
     }
+}
+
+void DataFlash_Class::Log_Write_Raw_Data(const AP_SerialManager &manager)
+{
+	AP_HAL::UARTDriver *uart_raw;
+	uint8_t buffer[1024] = {0};
+	uint32_t i = 0;
+
+	uart_raw = manager.find_serial(AP_SerialManager::SerialProtocol_Nova_Rtcm, 0);
+	if(uart_raw != nullptr) {
+		int16_t nbytes = uart_raw->available();
+
+		if(nbytes > sizeof(buffer)) {
+			GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "Log_Write_Raw_Data over len %d", nbytes);
+			//printf( "Log_Write_Raw_Data over len %d\n", nbytes);
+			//return;
+			nbytes = sizeof(buffer);
+		}
+
+		while(nbytes-- > 0) {
+			buffer[i++] = uart_raw->read();
+		}				
+
+		if(i > 0) {
+			WriteRawData(buffer, i);
+		}
+	}
 }
 
 // Write a Compass packet

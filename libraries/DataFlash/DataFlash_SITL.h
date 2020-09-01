@@ -40,7 +40,7 @@ private:
 public:
     DataFlash_SITL(DataFlash_Class &front, DFMessageWriter_DFLogStart *writer) :
         DataFlash_Block(front, writer) { }
-    void        Init() override;
+    void        Init(const AP_SerialManager& serial_manager) override;
     void        ReadManufacturerID();
     bool        CardInserted() const;
 };

@@ -173,6 +173,10 @@ void Copter::read_battery(void)
         failsafe_battery_event();
     }
 
+    if (!ap.usb_connected && !failsafe.battery2 && battery.exhausted2(g.fs_batt_voltage2, g.fs_batt_mah2)) {
+        failsafe_battery_event2();
+    }
+
     // log battery info to the dataflash
     if (should_log(MASK_LOG_CURRENT)) {
         Log_Write_Current();

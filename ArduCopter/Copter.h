@@ -151,6 +151,52 @@ public:
     void loop() override;
 
 private:
+    enum P900_MODE_TYPE{
+        P900_P2P = 0,
+        P900_MESH = 1
+    };
+    bool look_at_next_wp_flag;
+    bool  need_heading_rest;
+    float need_heading;
+    bool gcs_set_p900_id_flag;
+    bool gcs_get_p900_id_flag;
+    bool gcs_set_p900_mode_flag;
+    bool p900_read_mutex;
+    bool p900_write_mutex;
+    bool p900_set_mode_mutex;
+    uint8_t p900_id[20];
+    uint8_t return_p900_id[20];
+    uint8_t p900_mode;
+    uint8_t p900_mac[40];
+    bool emergency_return;
+    uint8_t event_report;
+     //copter indicator status
+    struct indicator_status{
+        uint32_t barometer_status               : 1; //bit1  0:bad, 1:healthy
+        uint32_t ins_status                     : 1; //bit2  0:bad, 1:healthy
+        uint32_t compass_status                 : 1; //bit3  0:bad, 1:healthy
+        uint32_t gps_status                     : 1; //bit4  0:bad, 1:healthy
+        uint32_t plane_battery_status           : 1; //bit5  0:bad, 1:healthy
+        uint32_t copter_battery_status          : 1; //bit6  0:bad, 1:healthy
+        uint32_t sdcard_status                  : 1; //bit7  0:bad, 1:healthy
+        uint32_t radio_status                   : 1; //bit8  0:bad, 1:healthy
+        uint32_t board_voltage_status           : 1; //bit9  0:bad, 1:healthy
+        uint32_t airspeed_status                : 1; //bit10  0:bad, 1:healthy
+        uint32_t rtk_head_status                : 1; //bit11  0:bad, 1:healthy
+        uint32_t eeprom_status                  : 1; //bit12  0:bad, 1:healthy
+        uint32_t hardware_safety_status         : 1; //bit13  0:bad, 1:healthy
+        uint32_t rtk_compass_diff               : 1; //bit14  0:bad, 1:healthy
+		uint32_t ppk_status 					: 1; //bit15 0:idle, 1:runing
+        uint32_t resave                         : 17; //resave
+    };
+    //load param status
+    enum  LOAD_PARAM_stauts{
+        LOAD_PARAM_OK = 0,
+        LOAD_PARAM_FAILED = 1,
+        PARAM_VERSION_ERR = 2
+    };
+    enum LOAD_PARAM_stauts load_param_flag;
+    int32_t wp_highest;
     // key aircraft parameters passed to multiple libraries
     AP_Vehicle::MultiCopter aparm;
 
@@ -317,6 +363,7 @@ private:
         uint8_t rc_override_active  : 1; // 0   // true if rc control are overwritten by ground station
         uint8_t radio               : 1; // 1   // A status flag for the radio failsafe
         uint8_t battery             : 1; // 2   // A status flag for the battery failsafe
+        uint8_t battery2            : 1;
         uint8_t gcs                 : 1; // 4   // A status flag for the ground station failsafe
         uint8_t ekf                 : 1; // 5   // true if ekf failsafe has occurred
         uint8_t terrain             : 1; // 6   // true if the missing terrain data failsafe has occurred
@@ -635,6 +682,11 @@ private:
     static const AP_Param::Info var_info[];
     static const struct LogStructure log_structure[];
 
+    void compass_save(void);
+    void update_compass(void);
+    void send_indicator(mavlink_channel_t chan);
+    void send_p900_id(mavlink_channel_t chan);
+    void send_event_report(mavlink_channel_t chan);
     void compass_accumulate(void);
     void compass_cal_update(void);
     void barometer_accumulate(void);
@@ -662,6 +714,7 @@ private:
     void set_simple_mode(uint8_t b);
     void set_failsafe_radio(bool b);
     void set_failsafe_battery(bool b);
+    void set_failsafe_battery2(bool b);
     void set_failsafe_gcs(bool b);
     void set_land_complete(bool b);
     void set_land_complete_maybe(bool b);
@@ -957,11 +1010,13 @@ private:
     void failsafe_radio_on_event();
     void failsafe_radio_off_event();
     void failsafe_battery_event(void);
+    void failsafe_battery_event2(void);
     void failsafe_gcs_check();
     void failsafe_gcs_off_event(void);
     void failsafe_terrain_check();
     void failsafe_terrain_set_status(bool data_ok);
     void failsafe_terrain_on_event();
+    void failsafe_distance_check();
     void gpsglitch_check();
     void set_mode_RTL_or_land_with_pause(mode_reason_t reason);
     void update_events();
@@ -1002,7 +1057,7 @@ private:
     void arm_motors_check();
     void auto_disarm_check();
     bool init_arm_motors(bool arming_from_gcs);
-    void init_disarm_motors();
+    bool init_disarm_motors();
     void motors_output();
     void lost_vehicle_check();
     void run_nav_updates(void);
@@ -1143,7 +1198,7 @@ private:
 
     void auto_spline_start(const Location_Class& destination, bool stopped_at_start, AC_WPNav::spline_segment_end_type seg_end_type, const Location_Class& next_destination);
     void print_flight_mode(AP_HAL::BetterStream *port, uint8_t mode);
-    void log_init(void);
+    void log_init(const AP_SerialManager& serial_manager_log);
     void run_cli(AP_HAL::UARTDriver *port);
     void init_capabilities(void);
     void dataflash_periodic(void);
@@ -1175,6 +1230,11 @@ public:
     int8_t test_rangefinder(uint8_t argc, const Menu::arg *argv);
 
     int8_t reboot_board(uint8_t argc, const Menu::arg *argv);
+
+    void get_p900_id();
+    void set_p900_id();
+    void set_p900_mode();
+    void raw_data_update();
 };
 
 #define MENU_FUNC(func) FUNCTOR_BIND(&copter, &Copter::func, int8_t, uint8_t, const Menu::arg *)

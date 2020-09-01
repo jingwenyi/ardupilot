@@ -34,7 +34,7 @@ const AP_Param::GroupInfo AP_BoardConfig::CAN_var_info::var_info[] = {
     // @Description: Bit rate can be set up to from 10000 to 1000000
     // @Range: 10000 1000000
     // @User: Advanced
-    AP_GROUPINFO("BITRATE", 2, AP_BoardConfig::CAN_var_info, _can_bitrate, 1000000),
+    AP_GROUPINFO("BITRATE", 2, AP_BoardConfig::CAN_var_info, _can_bitrate, 500000),
 
     // @Param: DEBUG
     // @DisplayName:  Level of debug for CAN devices

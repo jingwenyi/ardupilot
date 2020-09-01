@@ -260,7 +260,7 @@ void Copter::auto_wp_run()
         // get pilot's desired yaw rate
         target_yaw_rate = get_pilot_desired_yaw_rate(channel_yaw->get_control_in());
         if (!is_zero(target_yaw_rate)) {
-            set_auto_yaw_mode(AUTO_YAW_HOLD);
+            //set_auto_yaw_mode(AUTO_YAW_HOLD);
         }
     }
 
@@ -589,6 +589,37 @@ void Copter::auto_loiter_run()
 // set rtl parameter to true if this is during an RTL
 uint8_t Copter::get_default_auto_yaw_mode(bool rtl)
 {
+    if(!g.user_control_yaw_enable){
+        AP_Mission::Mission_Command currt_nav_cmd = mission.get_current_nav_cmd();
+        AP_Mission::Mission_Command last_nav_cmd;
+        mission.read_cmd_from_storage(mission.get_current_nav_cmd().index - 1, last_nav_cmd);
+
+        if(last_nav_cmd.type == MAV_POINT_NORMAL_TAKEPHOTO_WAYPOINT && currt_nav_cmd.type == MAV_POINT_NORMAL_BEFOREHAND_WAYPOINT){
+            return AUTO_YAW_HOLD;
+        }else if(last_nav_cmd.type == MAV_POINT_NORMAL_BEFOREHAND_WAYPOINT && currt_nav_cmd.type == MAV_POINT_NORMAL_BEFOREHAND_WAYPOINT){
+            need_heading_rest = true;
+            AP_Mission::Mission_Command next_nav_cmd;
+            mission.read_cmd_from_storage(mission.get_current_nav_cmd().index + 1, next_nav_cmd);
+            if(!look_at_next_wp_flag){
+                need_heading = get_bearing_cd(currt_nav_cmd.content.location, next_nav_cmd.content.location);
+            }else{
+                need_heading = get_bearing_cd(next_nav_cmd.content.location, currt_nav_cmd.content.location);
+            }
+
+            look_at_next_wp_flag = !look_at_next_wp_flag;
+            //gcs_send_text_fmt(MAV_SEVERITY_CRITICAL,"------need_heading:%6.2lf", (double)need_heading);
+            return AUTO_YAW_HOLD;
+        }else{
+            if(!need_heading_rest && last_nav_cmd.type == MAV_POINT_NORMAL_BEFOREHAND_WAYPOINT && currt_nav_cmd.type == MAV_POINT_NORMAL_TAKEPHOTO_WAYPOINT){
+                need_heading_rest = true;
+                look_at_next_wp_flag = true;
+                need_heading = get_bearing_cd(last_nav_cmd.content.location, currt_nav_cmd.content.location);
+                //gcs_send_text_fmt(MAV_SEVERITY_CRITICAL,"------need_heading:%6.2lf", (double)need_heading);
+            }
+            return AUTO_YAW_LOOK_AT_NEXT_WP;
+        }
+    }
+
     switch (g.wp_yaw_behavior) {
 
         case WP_YAW_BEHAVIOR_NONE:
@@ -752,7 +783,10 @@ float Copter::get_auto_heading(void)
         return initial_armed_bearing;
 
     case AUTO_YAW_LOOK_AT_NEXT_WP:
-    default:
+        if(!g.user_control_yaw_enable && need_heading_rest){
+            return need_heading;
+        }
+        default:
         // point towards next waypoint.
         // we don't use wp_bearing because we don't want the copter to turn too much during flight
         return wp_nav->get_yaw();

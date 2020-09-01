@@ -60,6 +60,12 @@ public:
     virtual void start() { }
 
     /*
+     *  get imu type
+     */
+
+    virtual int16_t get_imu_type(){return -1;}
+
+    /*
      * Return an AuxiliaryBus if backend has another bus it is able to export
      */
     virtual AuxiliaryBus *get_auxiliary_bus() { return nullptr; }
@@ -90,7 +96,8 @@ public:
         DEVTYPE_ACC_MPU9250  = 0x16,
         DEVTYPE_GYR_MPU6000  = 0x21,
         DEVTYPE_GYR_L3GD20   = 0x22,
-        DEVTYPE_GYR_MPU9250  = 0x24
+        DEVTYPE_GYR_MPU9250  = 0x24,
+		DEVTYPE_ADIS16375 = 0x25
     };
         
 protected:

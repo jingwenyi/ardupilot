@@ -271,3 +271,67 @@ bool DataFlash_Backend::WritesOK() const
 
     return true;
 }
+bool DataFlash_Backend::StartNewRawDataOK() const
+{
+    if (raw_data_started()) {
+        return false;
+    }
+
+    if (_front.in_raw_data_download()) {
+        return false;
+    }
+
+    return true;
+}
+
+bool DataFlash_Backend::WriteRawData(const void *pBuffer, uint16_t size, bool is_critical)
+{
+    if (StartNewRawDataOK()) {
+        start_new_raw_data();
+    }
+
+	if (!RawDataWritesOK()) {
+        return false;
+    }
+	
+    return _WriteRawData(pBuffer, size, is_critical);
+}
+
+
+bool DataFlash_Backend::StartNewPosDataOK() const
+{
+    if (pos_data_started()) {
+        return false;
+    }
+
+    if (_front.in_pos_data_download()) {
+        return false;
+    }
+	
+    return true;
+}
+
+bool DataFlash_Backend::WritePosData(const void *pBuffer, uint16_t size, bool is_critical)
+{
+	if(!ShouldPosData()) {
+		return false;
+	}
+
+    if (StartNewPosDataOK()) {
+        start_new_pos_data();
+    }
+
+	if (!PosDataWritesOK()) {
+        return false;
+    }
+
+    return _WritePosData(pBuffer, size, is_critical);
+}
+bool DataFlash_Backend::ShouldPosData()
+{
+	if (!_front.vehicle_is_armed()) {
+		return false;
+	}
+
+	return true;
+}

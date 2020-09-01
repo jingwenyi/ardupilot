@@ -38,9 +38,9 @@
 # define AP_SERIALMANAGER_CONSOLE_BUFSIZE_TX    512
 
 // mavlink default baud rates and buffer sizes
-#define AP_SERIALMANAGER_MAVLINK_BAUD           57600
-#define AP_SERIALMANAGER_MAVLINK_BUFSIZE_RX     128
-#define AP_SERIALMANAGER_MAVLINK_BUFSIZE_TX     256
+#define AP_SERIALMANAGER_MAVLINK_BAUD           115200
+#define AP_SERIALMANAGER_MAVLINK_BUFSIZE_RX     512
+#define AP_SERIALMANAGER_MAVLINK_BUFSIZE_TX     512
 
 // FrSky default baud rates, use default buffer sizes
 #define AP_SERIALMANAGER_FRSKY_D_BAUD           9600
@@ -51,7 +51,7 @@
 // GPS default baud rates and buffer sizes
 // we need a 256 byte buffer for some GPS types (eg. UBLOX)
 #define AP_SERIALMANAGER_GPS_BAUD               38400
-#define AP_SERIALMANAGER_GPS_BUFSIZE_RX         256
+#define AP_SERIALMANAGER_GPS_BUFSIZE_RX         512
 #define AP_SERIALMANAGER_GPS_BUFSIZE_TX         16
 
 // AlexMos Gimbal protocol default baud rates and buffer sizes
@@ -68,6 +68,21 @@
 #define AP_SERIALMANAGER_ULANDING_BAUD           115200
 #define AP_SERIALMANAGER_ULANDING_BUFSIZE_RX     128
 #define AP_SERIALMANAGER_ULANDING_BUFSIZE_TX     128
+
+// Nova RTK default baud rates and buffer sizes
+#define AP_SERIALMANAGER_RTCM_BAUD           460800
+#define AP_SERIALMANAGER_RTCM_BUFSIZE_RX     2048
+#define AP_SERIALMANAGER_RTCM_BUFSIZE_TX     512
+
+
+#define AP_SERIALMANAGER_Z6KA7_BAUD           115200
+#define AP_SERIALMANAGER_Z6KA7_BUFSIZE_RX     128
+#define AP_SERIALMANAGER_Z6KA7_BUFSIZE_TX     128
+
+// save log default baud rates and buffer sizes
+#define AP_SERIALMANAGER_SAVELOG_BAUD           460800
+#define AP_SERIALMANAGER_SAVELOG_BUFSIZE_RX     16
+#define AP_SERIALMANAGER_SAVELOG_BUFSIZE_TX     1024
 
 
 class AP_SerialManager {
@@ -89,7 +104,10 @@ public:
         SerialProtocol_FrSky_SPort_Passthrough = 10, // FrSky SPort Passthrough (OpenTX) protocol (X-receivers)
         SerialProtocol_Lidar360 = 11,                // Lightware SF40C or TeraRanger Tower
         SerialProtocol_Aerotenna_uLanding      = 12, // Ulanding support
-        SerialProtocol_Beacon = 13
+        SerialProtocol_Beacon = 13,
+        SerialProtocol_Nova_Rtcm = 14,
+        SerialProtocol_Save_Log = 15,
+        SerialProtocol_Z6ka7 = 16
     };
 
     // Constructor

@@ -23,7 +23,7 @@
 
 // definitions
 #define AP_MISSION_EEPROM_VERSION           0x65AE  // version number stored in first four bytes of eeprom.  increment this by one when eeprom format is changed
-#define AP_MISSION_EEPROM_COMMAND_SIZE      15      // size in bytes of all mission commands
+#define AP_MISSION_EEPROM_COMMAND_SIZE      17      // size in bytes of all mission commands
 
 #define AP_MISSION_MAX_NUM_DO_JUMP_COMMANDS 15      // allow up to 15 do-jump commands
 
@@ -245,6 +245,8 @@ public:
         uint16_t index;             // this commands position in the command list
         uint16_t id;                // mavlink command id
         uint16_t p1;                // general purpose parameter 1
+        uint8_t type;               //point type
+        uint8_t complete;           //fly complete
         Content content;
     };
 
@@ -316,6 +318,8 @@ public:
 
     /// check mission starts with a takeoff command
     bool starts_with_takeoff_cmd();
+
+    bool end_with_rtl_cmd();
 
     /// reset - reset mission to the first command
     void reset();
@@ -405,6 +409,7 @@ public:
     //  return MAV_MISSION_ACCEPTED on success, MAV_MISSION_RESULT error on failure
     static MAV_MISSION_RESULT mavlink_to_mission_cmd(const mavlink_mission_item_t& packet, AP_Mission::Mission_Command& cmd);
     static MAV_MISSION_RESULT mavlink_int_to_mission_cmd(const mavlink_mission_item_int_t& packet, AP_Mission::Mission_Command& cmd);
+    static MAV_MISSION_RESULT mavlink_to_mission_cmd(const mavlink_mission_single_t& packet, AP_Mission::Mission_Command& cmd);
 
     // mavlink_cmd_long_to_mission_cmd - converts a mavlink cmd long to an AP_Mission::Mission_Command object which can be stored to eeprom
     // return MAV_MISSION_ACCEPTED on success, MAV_MISSION_RESULT error on failure
@@ -494,6 +499,7 @@ private:
     // parameters
     AP_Int16                _cmd_total;  // total number of commands in the mission
     AP_Int8                 _restart;   // controls mission starting point when entering Auto mode (either restart from beginning of mission or resume from last command run)
+    AP_Int8                 _skipcomplete;
 
     // pointer to main program functions
     mission_cmd_fn_t        _cmd_start_fn;  // pointer to function which will be called when a new command is started

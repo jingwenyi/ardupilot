@@ -33,6 +33,10 @@ bool Copter::set_mode(control_mode_t mode, mode_reason_t reason)
     }
 #endif
 
+    if ((control_mode == LAND && mode == GUIDED) || (control_mode == AUTO && rtl_state == RTL_Land && mode == GUIDED)){
+        goto failed;
+    }
+
     switch (mode) {
         case ACRO:
             #if FRAME_CONFIG == HELI_FRAME
@@ -123,10 +127,8 @@ bool Copter::set_mode(control_mode_t mode, mode_reason_t reason)
             break;
     }
 
-#if FRAME_CONFIG == HELI_FRAME
 failed:
-#endif
-    
+
     // update flight mode
     if (success) {
         // perform any cleanup required by previous flight mode
@@ -154,6 +156,9 @@ failed:
         
     } else {
         // Log error that we failed to enter desired flight mode
+        event_report = COPTER_EVENT_REPORT_SET_MODE_FIALD;
+        gcs_send_message(MSG_EVENT_REPORT);
+
         Log_Write_Error(ERROR_SUBSYSTEM_FLIGHT_MODE,mode);
         gcs_send_text(MAV_SEVERITY_WARNING,"Flight mode change failed");
     }

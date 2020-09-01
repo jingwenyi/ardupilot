@@ -61,6 +61,13 @@ public:
     void broadcast_gps_type() const;
     virtual void Write_DataFlash_Log_Startup_messages() const;
 
+    virtual int8_t get_gps_type(void) const {return -1;} 
+
+    enum DevTypes {
+        DEVTYPE_OEM719 = 0x01,
+		DEVTYPE_BLOX_M8N = 0x02
+    };
+
 protected:
     AP_HAL::UARTDriver *port;           ///< UART we are attached to
     AP_GPS &gps;                        ///< access to frontend (for parameters)

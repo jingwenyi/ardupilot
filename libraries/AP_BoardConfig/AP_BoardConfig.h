@@ -7,14 +7,31 @@
 
 extern "C" typedef int (*main_fn_t)(int argc, char **);
 
+#if CONFIG_HAL_BOARD == HAL_BOARD_PX4 || CONFIG_HAL_BOARD == HAL_BOARD_VRBRAIN
+#define AP_FEATURE_SAFETY_BUTTON 1
+#else
+#define AP_FEATURE_SAFETY_BUTTON 0
+#endif
+
+
 class AP_BoardConfig {
 public:
     // constructor
     AP_BoardConfig(void)
     {
+        instance = this;
         AP_Param::setup_object_defaults(this, var_info);
     };
 
+    /* Do not allow copies */
+    AP_BoardConfig(const AP_BoardConfig &other) = delete;
+    AP_BoardConfig &operator=(const AP_BoardConfig&) = delete;
+
+    // singleton support
+    static AP_BoardConfig *get_instance(void) {
+        return instance;
+    }
+    
     void init(void);
     void init_safety(void);
 
@@ -63,6 +80,7 @@ public:
         PX4_BOARD_PIXRACER = 4,
         PX4_BOARD_PHMINI   = 5,
         PX4_BOARD_PH2SLIM  = 6,
+        PX4_BOARD_UAVRS = 7,
         PX4_BOARD_AEROFC   = 13,
         PX4_BOARD_PIXHAWK_PRO = 14,
         PX4_BOARD_AUAV21   = 20,
@@ -104,7 +122,23 @@ public:
         return 0;
 #endif
     }
+
+#if AP_FEATURE_SAFETY_BUTTON
+    enum board_safety_button_option {
+        BOARD_SAFETY_OPTION_BUTTON_ACTIVE_SAFETY_OFF=1,
+        BOARD_SAFETY_OPTION_BUTTON_ACTIVE_SAFETY_ON=2,
+        BOARD_SAFETY_OPTION_BUTTON_ACTIVE_ARMED=4,
+    };
+
+    // return safety button options. Bits are in enum board_safety_button_option
+    uint16_t get_safety_button_options(void) {
+        return uint16_t(px4.safety_option.get());
+    }
+#endif
+
 private:
+    static AP_BoardConfig *instance;
+
     AP_Int16 vehicleSerialNumber;
 
 #if HAL_WITH_UAVCAN
@@ -115,6 +149,7 @@ private:
     struct {
         AP_Int8 pwm_count;
         AP_Int8 safety_enable;
+        AP_Int16 safety_option;
         AP_Int32 ignore_safety_channels;
 #if CONFIG_HAL_BOARD == HAL_BOARD_PX4
         AP_Int8 ser1_rtscts;

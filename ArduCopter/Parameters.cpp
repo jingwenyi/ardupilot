@@ -1,4 +1,17 @@
 #include "Copter.h"
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <assert.h>
+#include <AP_Math/AP_Math.h>
+#include <stdio.h>
+#include <time.h>
+#include <dirent.h>
 
 /*
    This program is free software: you can redistribute it and/or modify
@@ -35,6 +48,16 @@ const AP_Param::Info Copter::var_info[] = {
     // @User: Advanced
     // @ReadOnly: True
     GSCALAR(format_version, "SYSID_SW_MREV",   0),
+
+    GSCALAR(fly_odometer_km,         "FLY_ODOMETER_KM",   0),
+
+    GSCALAR(fly_odometer_m,          "FLY_ODOMETER_M",   0),
+
+    GSCALAR(fly_time_hour,           "FLY_TIME_HOUR",   0),
+
+    GSCALAR(fly_time_minute,         "FLY_TIME_MINUTE",     0),
+
+    GSCALAR(fly_time_second,         "FLY_TIME_SECOND",     0),
 
     // @Param: SYSID_SW_TYPE
     // @DisplayName: Software Type
@@ -129,7 +152,7 @@ const AP_Param::Info Copter::var_info[] = {
     // @Range: 0 8000
     // @Increment: 1
     // @User: Standard
-    GSCALAR(rtl_altitude,   "RTL_ALT",     RTL_ALT),
+    GSCALAR(rtl_altitude,   "RTL_ALT",     0),
 
     // @Param: RTL_CONE_SLOPE
     // @DisplayName: RTL cone slope
@@ -162,7 +185,7 @@ const AP_Param::Info Copter::var_info[] = {
     // @Description: Controls whether failsafe will be invoked when battery voltage or current runs low
     // @Values: 0:Disabled,1:Land,2:RTL
     // @User: Standard
-    GSCALAR(failsafe_battery_enabled, "FS_BATT_ENABLE", FS_BATT_DISABLED),
+    GSCALAR(failsafe_battery_enabled, "FS_BATT_ENABLE", 2),
 
     // @Param: FS_BATT_VOLTAGE
     // @DisplayName: Failsafe battery voltage
@@ -172,6 +195,8 @@ const AP_Param::Info Copter::var_info[] = {
     // @User: Standard
     GSCALAR(fs_batt_voltage,        "FS_BATT_VOLTAGE", FS_BATT_VOLTAGE_DEFAULT),
 
+    GSCALAR(fs_batt_voltage2,       "FS_BATT_VOLTAGE2", 0),
+
     // @Param: FS_BATT_MAH
     // @DisplayName: Failsafe battery milliAmpHours
     // @Description: Battery capacity remaining to trigger failsafe. Set to 0 to disable battery remaining failsafe. If the battery remaining drops below this level then the copter will RTL
@@ -179,6 +204,10 @@ const AP_Param::Info Copter::var_info[] = {
     // @Increment: 50
     // @User: Standard
     GSCALAR(fs_batt_mah,            "FS_BATT_MAH", FS_BATT_MAH_DEFAULT),
+    
+    GSCALAR(fs_batt_mah2,           "FS_BATT_MAH2", 0),
+
+    GSCALAR(disarm_hight,           "DISARM_HIGHT", 50),
 
     // @Param: FS_GCS_ENABLE
     // @DisplayName: Ground Station Failsafe Enable
@@ -186,6 +215,8 @@ const AP_Param::Info Copter::var_info[] = {
     // @Values: 0:Disabled,1:Enabled always RTL,2:Enabled Continue with Mission in Auto Mode
     // @User: Standard
     GSCALAR(failsafe_gcs, "FS_GCS_ENABLE", FS_GCS_ENABLED_ALWAYS_RTL),
+    GSCALAR(failsafe_gcs_timeout, "FS_GCS_TIMEOUT" ,5),
+    GSCALAR(fs_distance_to_home, "FS_DISTANCE_HOME", 2000),
 
     // @Param: GPS_HDOP_GOOD
     // @DisplayName: GPS Hdop Good
@@ -232,6 +263,8 @@ const AP_Param::Info Copter::var_info[] = {
     // @Values: 0:Never change yaw, 1:Face next waypoint, 2:Face next waypoint except RTL, 3:Face along GPS course
     // @User: Standard
     GSCALAR(wp_yaw_behavior,  "WP_YAW_BEHAVIOR",    WP_YAW_BEHAVIOR_DEFAULT),
+
+    GSCALAR(user_control_yaw_enable, "CTRL_YAW_ENABLE", 0),
 
     // @Param: RTL_LOIT_TIME
     // @DisplayName: RTL loiter time
@@ -988,7 +1021,7 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     // @Description: Controls major frame class for multicopter component
     // @Values: 0:Undefined, 1:Quad, 2:Hexa, 3:Octa, 4:OctaQuad, 5:Y6, 6:Heli, 7:Tri, 8:SingleCopter, 9:CoaxCopter
     // @User: Standard
-    AP_GROUPINFO("FRAME_CLASS", 15, ParametersG2, frame_class, 0),
+    AP_GROUPINFO("FRAME_CLASS", 15, ParametersG2, frame_class, AP_Motors::MOTOR_FRAME_QUAD),
 
     // @Group: SERVO
     // @Path: ../libraries/SRV_Channel/SRV_Channels.cpp
@@ -1057,10 +1090,13 @@ void Copter::load_parameters(void)
         AP_HAL::panic("Bad var table");
     }
 
-    // disable centrifugal force correction, it will be enabled as part of the arming process
+     // disable centrifugal force correction, it will be enabled as part of the arming process
     ahrs.set_correct_centrifugal(false);
     hal.util->set_soft_armed(false);
 
+     load_param_flag = LOAD_PARAM_OK;
+
+#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
     if (!g.format_version.load() ||
         g.format_version != Parameters::k_format_version) {
 
@@ -1072,6 +1108,31 @@ void Copter::load_parameters(void)
         g.format_version.set_and_save(Parameters::k_format_version);
         cliSerial->printf("done.\n");
     }
+#else
+    int ret;
+    struct stat st;
+
+	ret = stat("/fs/microsd/UAVRS/WRITEPARAM", &st);
+    if (ret == OK) {
+
+        // erase all parameters
+        printf("Firmware change: erasing EEPROM...\n");
+        AP_Param::erase_all();
+        // save the current format version
+        g.format_version.set_and_save(Parameters::k_format_version);
+        printf("done.\n");
+    }
+
+    if(!g.format_version.load()){
+        load_param_flag = LOAD_PARAM_FAILED;
+        return;
+    }
+
+    if(g.format_version != Parameters::k_format_version){
+        load_param_flag = PARAM_VERSION_ERR;
+        return;
+    }
+#endif
 
     uint32_t before = micros();
     // Load all auto-loaded EEPROM variables

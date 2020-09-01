@@ -101,6 +101,8 @@ const AP_Scheduler::Task Copter::scheduler_tasks[] = {
     SCHED_TASK(run_nav_updates,       50,    100),
     SCHED_TASK(update_throttle_hover,100,     90),
     SCHED_TASK(three_hz_loop,          3,     75),
+    SCHED_TASK(update_compass,         10,    200),
+    SCHED_TASK(compass_save,          0.1,    200),
     SCHED_TASK(compass_accumulate,   100,    100),
     SCHED_TASK(barometer_accumulate,  50,     90),
 #if PRECISION_LANDING == ENABLED
@@ -109,7 +111,7 @@ const AP_Scheduler::Task Copter::scheduler_tasks[] = {
 #if FRAME_CONFIG == HELI_FRAME
     SCHED_TASK(check_dynamic_flight,  50,     75),
 #endif
-    SCHED_TASK(fourhundred_hz_logging,400,    50),
+    SCHED_TASK(fourhundred_hz_logging,5,    50),
     SCHED_TASK(update_notify,         50,     90),
     SCHED_TASK(one_hz_loop,            1,    100),
     SCHED_TASK(ekf_check,             10,     75),
@@ -122,14 +124,15 @@ const AP_Scheduler::Task Copter::scheduler_tasks[] = {
     SCHED_TASK(gcs_data_stream_send,  50,    550),
     SCHED_TASK(update_mount,          50,     75),
     SCHED_TASK(update_trigger,        50,     75),
-    SCHED_TASK(ten_hz_logging_loop,   10,    350),
-    SCHED_TASK(twentyfive_hz_logging, 25,    110),
+    SCHED_TASK(ten_hz_logging_loop,   5,    350),
+    SCHED_TASK(twentyfive_hz_logging, 5,    110),
     SCHED_TASK(dataflash_periodic,    400,    300),
     SCHED_TASK(perf_update,           0.1,    75),
     SCHED_TASK(read_receiver_rssi,    10,     75),
     SCHED_TASK(rpm_update,            10,    200),
     SCHED_TASK(compass_cal_update,   100,    100),
     SCHED_TASK(accel_cal_update,      10,    100),
+    SCHED_TASK(raw_data_update,       100,	  200),
 #if ADSB_ENABLED == ENABLED
     SCHED_TASK(avoidance_adsb_update, 10,    100),
 #endif
@@ -159,6 +162,285 @@ const AP_Scheduler::Task Copter::scheduler_tasks[] = {
     SCHED_TASK(stats_update,           1,    100),
 };
 
+
+
+void Copter::set_p900_id()
+{
+    static uint8_t set_p900_status = 0;
+
+    if(!gcs_set_p900_id_flag){
+        return;
+    }
+
+    if(p900_read_mutex || p900_set_mode_mutex){
+        return;
+    }
+
+    if(!p900_write_mutex){
+        p900_write_mutex = true;
+    }
+
+    if(set_p900_status == 0){
+        set_p900_status = 1;
+        //enter command mode
+        hal.uartC->write("+++");
+        return;
+    }
+
+    if(set_p900_status == 1){
+        set_p900_status = 2;
+        char tmp[30] = {0};
+        sprintf(tmp, "ATS104=%s\r", p900_id);
+        hal.uartC->write(tmp);
+        return;
+    }
+
+    if(set_p900_status == 2){
+        set_p900_status = 3;
+        hal.uartC->write("AT&W\r");
+        return;
+    }
+
+    if(set_p900_status == 3){
+        set_p900_status = 0;
+        hal.uartC->write("ATA\r");
+    }
+
+    gcs_set_p900_id_flag = false;
+    p900_write_mutex = false;
+}
+
+
+void Copter::get_p900_id()
+{
+    uint16_t nbytes;
+    static uint8_t get_p900_status = 0;
+
+    if(!gcs_get_p900_id_flag){
+        return;
+    }
+
+    if(p900_write_mutex || p900_set_mode_mutex){
+        return;
+    }
+
+    if(!p900_read_mutex){
+        p900_read_mutex = true;
+        return;
+    }
+
+    if(get_p900_status == 0){
+        get_p900_status = 1;
+        //enter command mode
+        hal.uartC->write("+++");
+        return;
+    }
+
+    if(get_p900_status == 1){
+        get_p900_status = 2;
+        hal.uartC->write("ATE0\r");
+        return;
+    }
+
+    if(get_p900_status == 2){
+        get_p900_status = 3;
+        //clear uart
+        nbytes = hal.uartC->available();
+        for(uint16_t i=0; i<nbytes; i++){
+            uint8_t c = hal.uartC->read();
+            printf("%c", c);
+        }
+        //get id
+        hal.uartC->write("ATS104?\r");
+        return;
+    }
+
+    
+    memset(return_p900_id, 0, sizeof(return_p900_id));
+    nbytes = hal.uartC->available();
+
+    printf("----nbytes:%d\r\n", nbytes);
+
+    uint8_t j = 0;
+    bool start_flag = false;
+    for(uint16_t i=0; i<nbytes; i++){
+        uint8_t c = hal.uartC->read();
+        if(c >= '0' && c <= '9')
+        {
+            start_flag = true;
+            return_p900_id[j++] = c;
+            continue;
+        }else{
+            if(start_flag){
+                break;
+            }
+        }
+     }
+
+     printf("------id:%s\r\n",return_p900_id);
+
+     gcs_send_message(MSG_P900_ID);
+
+    if(get_p900_status == 3){
+        get_p900_status = 0;
+        hal.uartC->write("ATA\r");
+    }
+    gcs_get_p900_id_flag = false;
+    p900_read_mutex = false;
+}
+
+
+void Copter::set_p900_mode()
+{
+    static uint8_t set_p900_mode_status = 0;
+
+    if(!gcs_set_p900_mode_flag){
+        return;
+    }
+
+    if(p900_read_mutex || p900_write_mutex){
+        return;
+    }
+
+    if(!p900_set_mode_mutex){
+        p900_set_mode_mutex = true;
+    }
+
+    if(set_p900_mode_status == 0){
+        set_p900_mode_status = 1;
+        //enter command mode
+        hal.uartC->write("+++");
+        return;
+    }
+
+    if(p900_mode == P900_P2P){
+        if(set_p900_mode_status == 1){
+            set_p900_mode_status = 2;
+            //set p2p mode
+            hal.uartC->write("AT&F11\r");
+            return;
+        }
+
+        if(set_p900_mode_status == 2){
+            set_p900_mode_status = 3;
+            //set p900 baud rate 115200
+            hal.uartC->write("ATS102=1\r");
+            return;
+        }
+
+        if(set_p900_mode_status == 3){
+            set_p900_mode_status = 4;
+            //set air baud rate 172800
+            hal.uartC->write("ATS103=0\r");
+            return;
+        }
+
+        if(set_p900_mode_status == 4){
+            set_p900_mode_status = 5;
+            hal.uartC->write("AT&W\r");
+            return;
+        }
+
+        if(set_p900_mode_status == 5){
+            set_p900_mode_status = 0;
+            hal.uartC->write("ATA\r");
+        }
+    }else if(p900_mode == P900_MESH){
+        if(set_p900_mode_status == 1){
+            set_p900_mode_status = 2;
+            //set p2p mode
+            hal.uartC->write("AT&F2\r");
+            return;
+        }
+
+        if(set_p900_mode_status == 2){
+            set_p900_mode_status = 3;
+            //set p900 baud rate 230400
+            hal.uartC->write("ATS102=0\r");
+            return;
+        }
+
+        if(set_p900_mode_status == 3){
+            set_p900_mode_status = 4;
+            //set air baud rate 230400
+            hal.uartC->write("ATS103=1\r");
+            return;
+        }
+
+        if(set_p900_mode_status == 4){
+            set_p900_mode_status = 5;
+            //set mac data
+            char tmp[40] = {0};
+            sprintf(tmp, "ATS140=%s\r", p900_mac);
+            hal.uartC->write(tmp);
+            return;
+        }
+
+        if(set_p900_mode_status == 5){
+            set_p900_mode_status = 6;
+            hal.uartC->write("AT&W\r");
+            return;
+        }
+
+        if(set_p900_mode_status == 6){
+            set_p900_mode_status = 0;
+            hal.uartC->write("ATA\r");
+        }
+    }
+
+    gcs_set_p900_mode_flag = false;
+    p900_set_mode_mutex = false;
+}
+
+
+/*
+  read and update compass
+ */
+void Copter::update_compass(void)
+{
+    if (g.compass_enabled && compass.read()) {
+        ahrs.set_compass(&compass);
+        compass.learn_offsets();
+        if (should_log(MASK_LOG_COMPASS) && !ahrs.have_ekf_logging()) {
+            DataFlash.Log_Write_Compass(compass);
+        }
+    } else {
+        ahrs.set_compass(nullptr);
+    }
+}
+
+
+void Copter::compass_save()
+{
+    if (g.compass_enabled &&
+        compass.get_learn_type() >= Compass::LEARN_INTERNAL &&
+        !hal.util->get_soft_armed()) {
+        /*
+          only save offsets when disarmed
+         */
+        compass.save_offsets();
+    }
+}
+
+/*
+  update raw data
+ */
+void Copter::raw_data_update(void)
+{
+	if(DataFlash_Class::instance()->should_raw_data(0)) {
+    		DataFlash_Class::instance()->Log_Write_Raw_Data(serial_manager);
+	} else {
+		AP_HAL::UARTDriver *uart_raw  = serial_manager.find_serial(AP_SerialManager::SerialProtocol_Nova_Rtcm, 0);
+		if(uart_raw != nullptr) {
+			uart_raw->flush();
+		}
+		DataFlash_Class::instance()->StopRawData();
+	}
+
+	if(!DataFlash_Class::instance()->should_pos_data(0)) {
+		DataFlash_Class::instance()->StopPosData();
+	}
+}
 
 void Copter::setup() 
 {
@@ -348,12 +630,15 @@ void Copter::update_mount()
 void Copter::update_trigger(void)
 {
 #if CAMERA == ENABLED
+    camera.setup_feedback_callback();
     camera.trigger_pic_cleanup();
     if (camera.check_trigger_pin()) {
+        camera._image_index_add();
         gcs_send_message(MSG_CAMERA_FEEDBACK);
         if (should_log(MASK_LOG_CAMERA)) {
             DataFlash.Log_Write_Camera(ahrs, gps, current_loc);
         }
+		DataFlash.Pos_Write_CameraInfo(LOG_CAMERA_MSG, ahrs, gps, current_loc);
     }    
 #endif
 }
@@ -479,6 +764,16 @@ void Copter::three_hz_loop()
 // one_hz_loop - runs at 1Hz
 void Copter::one_hz_loop()
 {
+    //last location
+    static struct Location last_loc;
+    static uint8_t save_count = 0;
+    static bool    save_odometer_flag = false;
+    static uint32_t odometer_m = g.fly_odometer_m.get();
+    static uint8_t time_s  = g.fly_time_second.get();
+    static bool     save_time_flag = false;
+    bool arm_status;
+    Location new_loc;
+
     if (should_log(MASK_LOG_ANY)) {
         Log_Write_Data(DATA_AP_STATE, ap.value);
     }
@@ -498,6 +793,10 @@ void Copter::one_hz_loop()
         // set all throttle channel settings
         motors->set_throttle_range(channel_throttle->get_radio_min(), channel_throttle->get_radio_max());
 #endif
+        //Reset direction state, automatic flight use
+        need_heading_rest = false;
+        look_at_next_wp_flag = false;
+        wp_highest = 0;
     }
 
     // update assigned functions and enable auxiliary servos
@@ -518,6 +817,91 @@ void Copter::one_hz_loop()
     // indicates that the sensor or subsystem is present but not
     // functioning correctly
     update_sensor_status_flags();
+
+    gcs_send_message(MSG_INDICATOR);
+
+    //config p900
+    set_p900_id();
+    get_p900_id();
+    set_p900_mode();
+    
+	static bool reset_image_index_flag = true;
+	if(reset_image_index_flag && motors->armed()) {
+		camera.reset_image_index();
+		reset_image_index_flag = false;
+	}
+	if(!motors->armed()) {
+		reset_image_index_flag = true;
+	}
+
+    //check distance to home
+    failsafe_distance_check();
+
+    //Calculate the miles traveled and Statistical flight time
+        save_count++;
+        arm_status = motors->armed();
+
+        //Calculate the miles traveled
+        if(gps.status() >= AP_GPS::GPS_OK_FIX_3D && ahrs.get_position(new_loc)){
+            if(last_loc.lat != 0 || last_loc.lng != 0){
+                if(arm_status){
+                    odometer_m += get_distance_cm(new_loc, last_loc)/100;
+                    save_odometer_flag = true;
+                }
+            }
+            last_loc.lat = new_loc.lat;
+            last_loc.lng = new_loc.lng;
+            last_loc.alt = new_loc.alt;
+        }else{
+            last_loc.lat = 0;
+            last_loc.lng = 0;
+            last_loc.alt = 0;
+        }
+
+        //Save once in 10 seconds
+        if(save_count >= 10 || (!arm_status && save_odometer_flag)){
+            if(save_odometer_flag){
+                if(odometer_m >= 1000){
+                    g.fly_odometer_km.set_and_save(g.fly_odometer_km + 1);
+                    odometer_m -= 1000;
+                }
+
+                g.fly_odometer_m.set_and_save(odometer_m);
+                if(!arm_status){
+                    save_odometer_flag = false;
+                }
+            }
+        }
+
+        //Statistical flight time
+        if(arm_status){
+            save_time_flag = true;
+            time_s++;
+        }
+
+        //Save once in 10 seconds
+        if(save_count >= 10 ||(!arm_status && save_time_flag)){
+            if(save_time_flag){
+                if(time_s >= 60){
+                    if(g.fly_time_minute + 1 >= 60){
+                        g.fly_time_hour.set_and_save(g.fly_time_hour+1);
+                        g.fly_time_minute.set_and_save(0);
+                    }else{
+                        g.fly_time_minute.set_and_save(g.fly_time_minute+1);
+                    }
+                    time_s -= 60;
+                }
+
+                g.fly_time_second.set_and_save(time_s);
+                if(!arm_status){
+                    save_time_flag = false;
+                }
+            }
+        }
+
+        if(save_count >=10){
+            save_count = 0;
+        }
 }
 
 // called at 50hz

@@ -400,8 +400,12 @@ private:
         Vector2f    pos;         // 0..1
         float       hgt;         // 2
         Vector3f    vel;         // 3..5
-        uint32_t    time_ms;     // 6
-        uint8_t     sensor_idx;  // 7..9
+        float       hdg;         //6
+        uint8_t     stat;        //7
+        uint8_t     hstat;       //8
+        uint8_t     have_hdg;    //9
+        uint32_t    time_ms;     // 10
+        uint8_t     sensor_idx;  // 11
     };
 
     struct mag_elements {
@@ -714,6 +718,12 @@ private:
 
     // update timing statistics structure
     void updateTimingStatistics(void);
+
+    void FuseGpsHeading();
+
+    void UseGpsHeadingResetYaw();
+
+    void fuseEulerYawUseGpsHead();
     
     // Length of FIFO buffers used for non-IMU sensor data.
     // Must be larger than the time period defined by IMU_BUFFER_LENGTH
@@ -1015,6 +1025,8 @@ private:
     float bcnPosOffsetMin;              // Vertical position offset of the beacon constellation origin relative to the EKF origin (m)
     float bcnPosOffsetMinVar;           // Variance of the bcnPosoffset state (m)
     float OffsetMinInnovFilt;           // Filtered magnitude of the range innovations using bcnPosOffsetLow
+    float offsetSwitchMage;
+    bool offsetSwitchMageFlag;
 
     // Range Beacon Fusion Debug Reporting
     uint8_t rngBcnFuseDataReportIndex;// index of range beacon fusion data last reported
@@ -1050,6 +1062,13 @@ private:
     float posDownAtLastMagReset;    // vertical position last time the mag states were reset (m)
     float yawInnovAtLastMagReset;   // magnetic yaw innovation last time the yaw and mag field states were reset (rad)
     Quaternion quatAtLastMagReset;  // quaternion states last time the mag states were reset
+    bool inflightYawResetRequest;   // true when then planner request reset yaw
+    enum YawType{
+            YAW_NEED_INIT=0,
+            YAW_USE_GPS=1,
+            YAW_USE_COPASS=2
+    };
+    uint8_t yaw_switch;
 
     // flags indicating severe numerical errors in innovation variance calculation for different fusion operations
     struct {

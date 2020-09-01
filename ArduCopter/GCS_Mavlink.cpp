@@ -129,7 +129,10 @@ NOINLINE void Copter::send_extended_status1(mavlink_channel_t chan)
         battery_remaining,      // in %
         0, // comm drops %,
         0, // comm drops in pkts,
-        0, 0, 0, 0);
+        battery.copter_voltage() * 1000, //mv
+        battery.steer_voltage() * 1000, //mv
+        0,
+        0);
 }
 
 void NOINLINE Copter::send_location(mavlink_channel_t chan)
@@ -346,6 +349,67 @@ void Copter::send_pid_tuning(mavlink_channel_t chan)
         }
     }
 }
+
+void Copter::send_indicator(mavlink_channel_t chan)
+{
+    float rtk_heading;
+    float compass_heading;
+    struct indicator_status indicator;
+    bool use_gps_head = gps.have_heading() && gps.heading_status() == AP_GPS::GPS_OK_FIX_3D_RTK_FIXED;
+
+    indicator.rtk_head_status = false;
+    rtk_heading = -1.0f;
+
+    for(uint8_t i=0; i<2; i++){
+        if(gps.get_gps_type(i) == AP_GPS_Backend::DEVTYPE_OEM719 && 
+            gps.heading_status(i) == AP_GPS::GPS_OK_FIX_3D_RTK_FIXED){
+            indicator.rtk_head_status = true;
+            rtk_heading = gps.get_heading(i);
+        }
+    }
+
+    if(compass.use_for_yaw()){
+        compass_heading = compass.calculate_heading(ahrs.get_rotation_body_to_ned())*RAD_TO_DEG;
+        if(compass_heading < 0 ){
+            compass_heading = 360.0f + compass_heading;
+        }
+    }else{
+        compass_heading = -1.0f;
+    }
+
+    indicator.barometer_status = arming.barometer_checks(false);
+    indicator.ins_status = arming.ins_checks(false);
+    indicator.compass_status = arming.compass_checks(false);
+    indicator.gps_status = arming.gps_checks(false);
+    indicator.plane_battery_status = arming.battery_checks(false);
+    indicator.sdcard_status = arming.logging_checks(false);
+    indicator.radio_status = arming.rc_calibration_checks(false) & arming.pilot_throttle_checks(false) & arming.manual_transmitter_checks(false);
+    indicator.board_voltage_status = true;//arming.board_voltage_checks(false);
+    indicator.hardware_safety_status = true;//arming.hardware_safety_check(false);
+    indicator.eeprom_status = (load_param_flag == LOAD_PARAM_OK ? true:false);
+	indicator.ppk_status = arming.ppk_checks(false);
+
+    float heading_error = fabs(rtk_heading - compass_heading);
+    heading_error = heading_error > 180 ? 360 - heading_error : heading_error;
+
+     if(!indicator.compass_status || !use_gps_head || (copter.compass.use_for_yaw() && use_gps_head && heading_error > 90.0f)){
+        indicator.rtk_compass_diff = false;
+    }else{
+        indicator.rtk_compass_diff = true;
+    }
+
+    gcs_chan[chan-MAVLINK_COMM_0].send_indicator(*((uint32_t*)&indicator), rtk_heading, compass_heading, g.fly_odometer_km, g.fly_time_hour);
+}
+
+void Copter::send_p900_id(mavlink_channel_t chan)
+{
+    gcs_chan[chan-MAVLINK_COMM_0].send_p900_id(return_p900_id, strlen((char*)return_p900_id));
+}
+
+void Copter::send_event_report(mavlink_channel_t chan){
+    gcs_chan[chan-MAVLINK_COMM_0].send_event_report(event_report);
+}
+
 
 uint32_t GCS_MAVLINK_Copter::telem_delay() const
 {
@@ -599,6 +663,16 @@ bool GCS_MAVLINK_Copter::try_send_message(enum ap_message id)
     case MSG_BATTERY_STATUS:
         send_battery_status(copter.battery);
         break;
+    case MSG_INDICATOR:
+        CHECK_PAYLOAD_SIZE(INDICATOR_STATUS);
+        copter.send_indicator(chan);
+        break;
+    case MSG_P900_ID:
+        copter.send_p900_id(chan);
+        break;
+    case MSG_EVENT_REPORT:
+        copter.send_event_report(chan);
+        break;
     }
 
     return true;
@@ -708,6 +782,8 @@ GCS_MAVLINK_Copter::data_stream_send(void)
 
     if (!copter.in_mavlink_delay && !copter.motors->armed()) {
         handle_log_send(copter.DataFlash);
+        handle_raw_data_send(copter.DataFlash);
+        handle_pos_data_send(copter.DataFlash);
     }
 
     copter.gcs_out_of_time = false;
@@ -870,7 +946,7 @@ void GCS_MAVLINK_Copter::handleMessage(mavlink_message_t* msg)
         send_text(MAV_SEVERITY_INFO, FIRMWARE_STRING);
 
 #if defined(PX4_GIT_VERSION) && defined(NUTTX_GIT_VERSION)
-        send_text(MAV_SEVERITY_INFO, "PX4: " PX4_GIT_VERSION " NuttX: " NUTTX_GIT_VERSION);
+        send_text(MAV_SEVERITY_INFO, "UAV-RS: " PX4_GIT_VERSION " operating system: " NUTTX_GIT_VERSION);
 #endif
         GCS_MAVLINK::send_statustext_chan(MAV_SEVERITY_INFO, chan, "Frame: %s", copter.get_frame_string());
         handle_param_request_list(msg);
@@ -1101,6 +1177,8 @@ void GCS_MAVLINK_Copter::handleMessage(mavlink_message_t* msg)
             break;
 
         case MAV_CMD_NAV_TAKEOFF: {
+
+        #if 0
             // param3 : horizontal navigation by pilot acceptable
             // param4 : yaw angle   (not supported)
             // param5 : latitude    (not supported)
@@ -1114,6 +1192,60 @@ void GCS_MAVLINK_Copter::handleMessage(mavlink_message_t* msg)
             } else {
                 result = MAV_RESULT_FAILED;
             }
+
+            break;
+         #endif
+            if(copter.control_mode == STABILIZE && copter.motors->armed()){
+
+
+                // param3 : horizontal navigation by pilot acceptable
+                // param4 : yaw angle   (not supported)
+                // param5 : latitude    (not supported)
+                // param6 : longitude   (not supported)
+                // param7 : altitude [metres]
+
+                float takeoff_alt = packet.param7 * 100;      // Convert m to cm
+
+                if(is_zero(packet.param3)) {
+                    if(copter.set_mode(GUIDED, MODE_REASON_GCS_COMMAND)){
+                        if(copter.do_user_takeoff(takeoff_alt, is_zero(packet.param3))) {
+                            result = MAV_RESULT_ACCEPTED;
+                            mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_TAKEOFF);
+                        }else{
+                            result = MAV_RESULT_FAILED;
+                            mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_TAKEOFF_REFUSE);
+                            GCS_MAVLINK::send_statustext_chan(MAV_SEVERITY_CRITICAL, chan, "do user takeoff failed!");
+                        }
+                    }else{
+                        result = MAV_RESULT_FAILED;
+                        mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_TAKEOFF_REFUSE);
+                        GCS_MAVLINK::send_statustext_chan(MAV_SEVERITY_CRITICAL, chan, "change to guided mode failed!");
+                    }
+                }else if(copter.mission.starts_with_takeoff_cmd()){
+                    copter.mission.reset();
+                    //Our first point is takeoff, so we can switch into the auto mode.
+                    if(copter.set_mode(AUTO, MODE_REASON_GCS_COMMAND)){
+                        copter.set_auto_armed(true);
+                        if (copter.mission.state() != AP_Mission::MISSION_RUNNING) {
+                            copter.mission.start_or_resume();
+                        }
+                        result = MAV_RESULT_ACCEPTED;
+                        mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_TAKEOFF);
+                     }else{
+                        result = MAV_RESULT_FAILED;
+                        mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_TAKEOFF_REFUSE);
+                        GCS_MAVLINK::send_statustext_chan(MAV_SEVERITY_CRITICAL, chan, "set auto mode failed!");
+                     }
+                }else{
+                    GCS_MAVLINK::send_statustext_chan(MAV_SEVERITY_CRITICAL, chan, "the firs waypoint is not takeoff!");
+                    result = MAV_RESULT_FAILED;
+                    mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_TAKEOFF_REFUSE);
+                }
+
+            }else{
+                result = MAV_RESULT_FAILED;
+                mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_TAKEOFF_REFUSE);
+            }
             break;
         }
 
@@ -1125,14 +1257,31 @@ void GCS_MAVLINK_Copter::handleMessage(mavlink_message_t* msg)
             break;
 
         case MAV_CMD_NAV_RETURN_TO_LAUNCH:
-            if (copter.set_mode(RTL, MODE_REASON_GCS_COMMAND)) {
+            if(copter.control_mode == AUTO && copter.mission.end_with_rtl_cmd()){
+                copter.mission.set_current_cmd(copter.mission.num_commands() - 1);
                 result = MAV_RESULT_ACCEPTED;
+                mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_RETURN);
+            }else if (copter.set_mode(RTL, MODE_REASON_GCS_COMMAND)) {
+                result = MAV_RESULT_ACCEPTED;
+                mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_RETURN);
+            }else{
+                result = MAV_RESULT_FAILED;
+                mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_RETURN_REFUSE);
             }
             break;
 
         case MAV_CMD_NAV_LAND:
-            if (copter.set_mode(LAND, MODE_REASON_GCS_COMMAND)) {
-                result = MAV_RESULT_ACCEPTED;
+            if(copter.gps.status() >= AP_GPS::GPS_OK_FIX_3D && get_distance(copter.ahrs.get_home(),copter.current_loc) > 100){
+                result = MAV_RESULT_FAILED;
+                mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_LAND_REFUSE);
+            }else{
+                if (copter.set_mode(LAND, MODE_REASON_GCS_COMMAND)) {
+                    result = MAV_RESULT_ACCEPTED;
+                    mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_LAND);
+                }else{
+                    result = MAV_RESULT_FAILED;
+                    mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_LAND_REFUSE);
+                }
             }
             break;
 
@@ -1329,13 +1478,43 @@ void GCS_MAVLINK_Copter::handleMessage(mavlink_message_t* msg)
         case MAV_CMD_COMPONENT_ARM_DISARM:
             if (is_equal(packet.param1,1.0f)) {
                 // attempt to arm and return success or failure
-                if (copter.init_arm_motors(true)) {
-                    result = MAV_RESULT_ACCEPTED;
+                //if (copter.init_arm_motors(true)) {
+                //    result = MAV_RESULT_ACCEPTED;
+                //}
+
+                if(!copter.motors->armed()){
+                    // run pre_arm_checks and arm_checks and display failures
+                    copter.set_mode(STABILIZE, MODE_REASON_GCS_COMMAND);
+                    copter.mission.reset();
+                    if(copter.control_mode == STABILIZE){
+                        if (copter.init_arm_motors(true)) {
+                            copter.rtl_state = RTL_InitialClimb;
+                            result = MAV_RESULT_ACCEPTED;
+                            mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_ARM);
+                        } else {
+                            result = MAV_RESULT_FAILED;
+                            mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_ARM_REFUSE);
+                        }
+                    }else{
+                        result = MAV_RESULT_FAILED;
+                        mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_ARM_REFUSE);
+                    }
+                }else{
+                    result = MAV_RESULT_FAILED;
+                    mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_ARM_REFUSE);
                 }
-            } else if (is_zero(packet.param1) && (copter.ap.land_complete || is_equal(packet.param2,21196.0f)))  {
+            } else if (is_zero(packet.param1))  {
                 // force disarming by setting param2 = 21196 is deprecated
-                copter.init_disarm_motors();
-                result = MAV_RESULT_ACCEPTED;
+                //copter.init_disarm_motors();
+                //result = MAV_RESULT_ACCEPTED;
+
+                if (copter.init_disarm_motors()) {
+                    result = MAV_RESULT_ACCEPTED;
+                    mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_DISARM);
+                } else {
+                    result = MAV_RESULT_FAILED;
+                    mavlink_msg_plane_event_report_send(chan, COPTER_EVENT_REPORT_DISARM_REFUSE);
+                }
             } else {
                 result = MAV_RESULT_UNSUPPORTED;
             }
@@ -1483,10 +1662,6 @@ void GCS_MAVLINK_Copter::handleMessage(mavlink_message_t* msg)
             result = MAV_RESULT_ACCEPTED;
 
             send_text(MAV_SEVERITY_INFO, FIRMWARE_STRING);
-
-            #if defined(PX4_GIT_VERSION) && defined(NUTTX_GIT_VERSION)
-            send_text(MAV_SEVERITY_INFO, "PX4: " PX4_GIT_VERSION " NuttX: " NUTTX_GIT_VERSION);
-            #endif
 
             GCS_MAVLINK::send_statustext_chan(MAV_SEVERITY_INFO, chan, "Frame: %s", copter.get_frame_string());
 
@@ -1826,7 +2001,6 @@ void GCS_MAVLINK_Copter::handleMessage(mavlink_message_t* msg)
         break;
     }
 
-    case MAVLINK_MSG_ID_GPS_RTCM_DATA:
     case MAVLINK_MSG_ID_GPS_INPUT:
     case MAVLINK_MSG_ID_HIL_GPS:
     {
@@ -1905,6 +2079,24 @@ void GCS_MAVLINK_Copter::handleMessage(mavlink_message_t* msg)
             handle_log_message(msg, copter.DataFlash);
         }
         break;
+    case MAVLINK_MSG_ID_RAW_DATA_REQUEST_LIST:
+    	/* fall through */
+    case MAVLINK_MSG_ID_RAW_DATA_REQUEST_DATA:
+    	/* fall through */
+    case MAVLINK_MSG_ID_RAW_DATA_ERASE:
+    	/* fall through */
+    case MAVLINK_MSG_ID_RAW_DATA_REQUEST_END:
+    	/* fall through */
+    case MAVLINK_MSG_ID_POS_DATA_REQUEST_LIST:
+    	/* fall through */
+    case MAVLINK_MSG_ID_POS_DATA_REQUEST_DATA:
+    	/* fall through */
+    case MAVLINK_MSG_ID_POS_DATA_ERASE:
+    	/* fall through */
+    case MAVLINK_MSG_ID_POS_DATA_REQUEST_END:
+    	/* fall through */
+    	handle_ppk_message(msg, copter.DataFlash);		
+    	break;
 
     case MAVLINK_MSG_ID_SERIAL_CONTROL:
         handle_serial_control(msg, copter.gps);
@@ -2076,6 +2268,27 @@ void GCS_MAVLINK_Copter::handleMessage(mavlink_message_t* msg)
 #if VISUAL_ODOMETRY_ENABLED == ENABLED
         copter.g2.visual_odom.handle_msg(msg);
 #endif
+        break;
+
+    case MAVLINK_MSG_ID_GCS_GET_PLANE_P900_ID:
+        copter.gcs_get_p900_id_flag = true;
+        break;
+
+     case MAVLINK_MSG_ID_GCS_SET_PLANE_P900_ID:
+        mavlink_gcs_set_plane_p900_id_t need_id;
+        mavlink_msg_gcs_set_plane_p900_id_decode(msg, &need_id);
+        memset(copter.p900_id, 0, sizeof(copter.p900_id));
+        memcpy(copter.p900_id, need_id.id, need_id.count);
+        copter.gcs_set_p900_id_flag = true;
+        break;
+
+     case MAVLINK_MSG_ID_GCS_SET_PLANE_P900_MODE:
+        mavlink_gcs_set_plane_p900_mode_t need_mode;
+        mavlink_msg_gcs_set_plane_p900_mode_decode(msg, &need_mode);
+        copter.p900_mode = need_mode.type;
+        memset(copter.p900_mac, 0, sizeof(copter.p900_mac));
+        memcpy(copter.p900_mac, need_mode.mac, need_mode.count);
+        copter.gcs_set_p900_mode_flag = true;
         break;
 
     default:

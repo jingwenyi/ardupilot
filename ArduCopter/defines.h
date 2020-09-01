@@ -124,6 +124,8 @@ enum mode_reason_t {
     MODE_REASON_AVOIDANCE,
     MODE_REASON_AVOIDANCE_RECOVERY,
     MODE_REASON_THROW_COMPLETE,
+    MODE_REASON_DISTANCE_CHECK,
+    MODE_REASON_BATTERY_FAILSAFE2,
 };
 
 // Tuning enumeration
@@ -169,6 +171,33 @@ enum tuning_func {
     TUNING_RATE_MOT_YAW_HEADROOM =      55, // motors yaw headroom minimum
     TUNING_RATE_YAW_FILT =              56  // yaw rate input filter
 };
+
+
+enum COPTER_EVENT_REPORT_TO_GCS{
+    COPTER_EVENT_REPORT_ARM = 0,                 // arm event 
+    COPTER_EVENT_REPORT_ARM_REFUSE = 1,          // arm event refuse
+    COPTER_EVENT_REPORT_TAKEOFF = 2,             //takeoff event 
+    COPTER_EVENT_REPORT_TAKEOFF_REFUSE = 3,      //takeoff event refuse
+    COPTER_EVENT_REPORT_DISARM = 4,              //disarm event
+    COPTER_EVENT_REPORT_DISARM_REFUSE = 5,       //disarm event refuse
+    COPTER_EVENT_REPORT_LAND = 6,                //land event
+    COPTER_EVENT_REPORT_LAND_REFUSE = 7,         //land event refuse
+    COPTER_EVENT_REPORT_RETURN = 8,              //return event
+    COPTER_EVENT_REPORT_RETURN_REFUSE = 9,       //return event refuse
+    COPTER_EVENT_REPORT_LOW_BATT_ONE = 10,       //one-level Low battery to return
+    COPTER_EVENT_REPORT_LOW_BATT_TWO = 11,       //two-level low battery to land
+    COPTER_EVENT_REPORT_LOSE_HEIGHT = 12,        //lose height to land
+    COPTER_EVENT_REPORT_AIRSPEED_BAD = 13,       //airspeed bad to return
+    COPTER_EVENT_REPORT_NAVIGATION_BAD = 14,     //navigation bad to return
+    COPTER_EVENT_REPORT_SDCARD_BAD = 15,         //sdcard bad to return
+    COPTER_EVENT_REPORT_RC_GCS_LOSE  = 16,       //rc or gcs lose to return
+    COPTER_EVENT_REPORT_EMERGENCY_ASS = 17,      //emergency event open assisted
+    COPTER_EVENT_REPORT_EMERGENCY_QLAND = 18,    //emergency event qland
+    COPTER_EVENT_REPORT_DISTANCE_PROTECTION = 19, //distance protection
+    COPTER_EVENT_REPORT_LOST_GPS  = 20,            //lost gps
+    COPTER_EVENT_REPORT_SET_MODE_FIALD = 21
+};
+
 
 // Acro Trainer types
 #define ACRO_TRAINER_DISABLED   0

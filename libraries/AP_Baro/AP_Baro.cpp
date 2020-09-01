@@ -426,6 +426,10 @@ void AP_Baro::init(void)
 #endif
         break;
 
+    case AP_BoardConfig::PX4_BOARD_UAVRS:
+        ADD_BACKEND(AP_Baro_MS56XX::probe(*this,
+                                          std::move(hal.spi->get_device(HAL_BARO_MS5611_NAME))));
+        break;
     default:
         break;
     }
@@ -475,7 +479,7 @@ void AP_Baro::init(void)
 #endif
     }
     
-#if HAL_WITH_UAVCAN
+#if 0//HAL_WITH_UAVCAN
     // If there is place left - allocate one UAVCAN based baro
     if ((AP_BoardConfig::get_can_enable() != 0) && (hal.can_mgr != nullptr))
     {

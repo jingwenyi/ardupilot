@@ -220,11 +220,19 @@ bool Copter::init_arm_motors(bool arming_from_gcs)
 }
 
 // init_disarm_motors - disarm motors
-void Copter::init_disarm_motors()
+bool Copter::init_disarm_motors()
 {
+    float alt = 0.0f;
+    ahrs.get_relative_position_D_home(alt);
+
+    if(-alt > g.disarm_hight){
+        gcs_send_text_fmt(MAV_SEVERITY_INFO,"The current height %4.2lfm accepts a disarm common.", (double)-alt);
+        return false;
+    }
+    
     // return immediately if we are already disarmed
     if (!motors->armed()) {
-        return;
+        return false;
     }
 
 #if HIL_MODE != HIL_MODE_DISABLED || CONFIG_HAL_BOARD == HAL_BOARD_SITL
@@ -266,6 +274,8 @@ void Copter::init_disarm_motors()
     hal.util->set_soft_armed(false);
 
     ap.in_arming_delay = false;
+
+    return true;
 }
 
 // motors_output - send output to motors library which will adjust and send to ESCs and servos

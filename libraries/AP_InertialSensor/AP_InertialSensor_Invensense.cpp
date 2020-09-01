@@ -399,6 +399,7 @@ void AP_InertialSensor_Invensense::start()
     case Invensense_MPU9250:
         gdev = DEVTYPE_GYR_MPU9250;
         adev = DEVTYPE_ACC_MPU9250;
+        dev_type = DEVTYPE_GYR_MPU9250;
         break;
     case Invensense_MPU6000:
     case Invensense_MPU6500:
@@ -407,6 +408,7 @@ void AP_InertialSensor_Invensense::start()
     default:
         gdev = DEVTYPE_GYR_MPU6000;
         adev = DEVTYPE_ACC_MPU6000;
+        dev_type = DEVTYPE_GYR_MPU6000;
         break;
     }
 
@@ -521,6 +523,12 @@ void AP_InertialSensor_Invensense::accumulate()
 {
     // nothing to do
 }
+
+int16_t AP_InertialSensor_Invensense::get_imu_type()
+{
+    return dev_type;
+}
+
 
 AuxiliaryBus *AP_InertialSensor_Invensense::get_auxiliary_bus()
 {

@@ -120,6 +120,7 @@ public:
     float get_lag(void) const override;
 
     const char *name() const override { return "u-blox"; }
+    int8_t get_gps_type() const override {return DEVTYPE_BLOX_M8N;} 
 
 private:
     // u-blox UBX protocol essentials

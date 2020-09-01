@@ -93,6 +93,13 @@ void Copter::set_failsafe_battery(bool b)
     AP_Notify::flags.failsafe_battery = b;
 }
 
+void Copter::set_failsafe_battery2(bool b)
+{
+    failsafe.battery2 = b;
+    AP_Notify::flags.failsafe_battery = b;
+}
+
+
 // ---------------------------------------------
 void Copter::set_failsafe_gcs(bool b)
 {

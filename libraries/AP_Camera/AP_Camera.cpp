@@ -60,7 +60,7 @@ const AP_Param::GroupInfo AP_Camera::var_info[] = {
     // @Description: This sets whether the relay goes high or low when it triggers. Note that you should also set RELAY_DEFAULT appropriately for your camera
     // @Values: 0:Low,1:High
     // @User: Standard
-    AP_GROUPINFO("RELAY_ON",    5, AP_Camera, _relay_on, 1),
+    AP_GROUPINFO("RELAY_ON",    5, AP_Camera, _relay_on, AP_CAMERA_RELAY_DEFAULT_ON),
 
     // @Param: MIN_INTERVAL
     // @DisplayName: Minimum time between photos
@@ -90,7 +90,7 @@ const AP_Param::GroupInfo AP_Camera::var_info[] = {
     // @Description: Polarity for feedback pin. If this is 1 then the feedback pin should go high on trigger. If set to 0 then it should go low
     // @Values: 0:TriggerLow,1:TriggerHigh
     // @User: Standard
-    AP_GROUPINFO("FEEDBACK_POL",  9, AP_Camera, _feedback_polarity, 1),
+    AP_GROUPINFO("FEEDBACK_POL",  9, AP_Camera, _feedback_polarity, AP_CAMERA_FEEDBACK_DEFAULT_POL),
     
     AP_GROUPEND
 };
@@ -131,9 +131,6 @@ AP_Camera::relay_pic()
 void
 AP_Camera::trigger_pic(bool send_mavlink_msg)
 {
-    setup_feedback_callback();
-
-    _image_index++;
     switch (_trigger_type)
     {
     case AP_CAMERA_TRIGGER_TYPE_SERVO:
@@ -397,4 +394,9 @@ failed:
         hal.scheduler->register_timer_process(FUNCTOR_BIND_MEMBER(&AP_Camera::feedback_pin_timer, void));
     }
     _timer_installed = true;
+}
+
+void AP_Camera::reset_image_index()
+{
+	_image_index = 0;
 }

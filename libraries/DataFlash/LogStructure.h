@@ -10,8 +10,8 @@
 
 // once the logging code is all converted we will remove these from
 // this header
-#define HEAD_BYTE1  0xA3    // Decimal 163
-#define HEAD_BYTE2  0x95    // Decimal 149
+#define HEAD_BYTE1  0x95    // Decimal 163
+#define HEAD_BYTE2  0x27    // Decimal 149
 
 // structure used to define logging format
 struct LogStructure {
@@ -66,6 +66,8 @@ struct PACKED log_GPA {
     uint16_t vacc;
     uint16_t sacc;
     uint8_t  have_vv;
+    uint8_t  heading_status;
+    float    hdg;
     uint32_t sample_ms;
 };
 
@@ -223,6 +225,7 @@ struct PACKED log_POWR {
     float Vcc;
     float Vservo;
     uint16_t flags;
+    uint8_t safety_and_arm;
 };
 
 struct PACKED log_EKF1 {
@@ -823,8 +826,8 @@ struct PACKED log_Beacon {
 #define ESC_LABELS "TimeUS,RPM,Volt,Curr,Temp"
 #define ESC_FMT   "Qcccc"
 
-#define GPA_LABELS "TimeUS,VDop,HAcc,VAcc,SAcc,VV,SMS"
-#define GPA_FMT   "QCCCCBI"
+#define GPA_LABELS "TimeUS,VDop,HAcc,VAcc,SAcc,VV,HS,HDG,SMS"
+#define GPA_FMT   "QCCCCBBfI"
 
 // see "struct GPS_State" and "Log_Write_GPS":
 #define GPS_LABELS "TimeUS,Status,GMS,GWk,NSats,HDop,Lat,Lng,Alt,Spd,GCrs,VZ,U"
@@ -905,7 +908,7 @@ Format characters in the format string for binary log messages
     { LOG_BARO_MSG, sizeof(log_BARO), \
       "BARO",  BARO_FMT, BARO_LABELS }, \
     { LOG_POWR_MSG, sizeof(log_POWR), \
-      "POWR","QffH","TimeUS,Vcc,VServo,Flags" },  \
+      "POWR","QffHB","TimeUS,Vcc,VServo,Flags,Safety" },  \
     { LOG_CMD_MSG, sizeof(log_Cmd), \
       "CMD", "QHHHfffffff","TimeUS,CTot,CNum,CId,Prm1,Prm2,Prm3,Prm4,Lat,Lng,Alt" }, \
     { LOG_RADIO_MSG, sizeof(log_Radio), \

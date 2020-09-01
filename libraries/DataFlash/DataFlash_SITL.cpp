@@ -27,9 +27,9 @@ static int flash_fd;
 static uint8_t buffer[2][DF_PAGE_SIZE];
 
 // Public Methods //////////////////////////////////////////////////////////////
-void DataFlash_SITL::Init()
+void DataFlash_SITL::Init(const AP_SerialManager& serial_manager)
 {
-    DataFlash_Backend::Init();
+    DataFlash_Backend::Init(serial_manager);
 	if (flash_fd == 0) {
 		flash_fd = open("dataflash.bin", O_RDWR|O_CLOEXEC, 0777);
 		if (flash_fd == -1) {

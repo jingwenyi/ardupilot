@@ -14,7 +14,7 @@ public:
     // The increment will prevent old parameters from being used incorrectly
     // by newer code.
     //
-    static const uint16_t        k_format_version = 120;
+    static const uint16_t        k_format_version = 9527;
 
     // The parameter software_type is set up solely for ground station use
     // and identifies the software type (eg ArduPilotMega versus
@@ -367,6 +367,21 @@ public:
 
         // 254,255: reserved
 
+        k_param_fly_odometer_km = 256,
+        k_param_fly_odometer_m,
+        k_param_fly_time_hour,
+        k_param_fly_time_minute,
+        k_param_fly_time_second,
+
+        k_param_disarm_hight = 261,
+
+        //uavrs parameters
+        k_param_failsafe_gcs_timeout = 300,
+        k_param_fs_distance_to_home = 301,
+        k_param_fs_batt_mah2 = 302,
+        k_param_fs_batt_voltage2 = 303,
+        k_param_user_control_yaw_enable = 304,
+
         // the k_param_* space is 9-bits in size
         // 511: reserved
     };
@@ -395,16 +410,22 @@ public:
 
     AP_Int8         failsafe_battery_enabled;   // battery failsafe enabled
     AP_Float        fs_batt_voltage;            // battery voltage below which failsafe will be triggered
+    AP_Float        fs_batt_voltage2;
     AP_Float        fs_batt_mah;                // battery capacity (in mah) below which failsafe will be triggered
+    AP_Float        fs_batt_mah2;
 
     AP_Int8         failsafe_gcs;               // ground station failsafe behavior
+    AP_Float        failsafe_gcs_timeout;
     AP_Int16        gps_hdop_good;              // GPS Hdop value at or below this value represent a good position
+
+    AP_Int32        fs_distance_to_home;
 
     AP_Int8         compass_enabled;
     AP_Int8         super_simple;
     AP_Int16        rtl_alt_final;
     AP_Int16        rtl_climb_min;              // rtl minimum climb in cm
 
+    AP_Int8         user_control_yaw_enable;
     AP_Int8         wp_yaw_behavior;            // controls how the autopilot controls yaw during missions
     AP_Int8         rc_feel_rp;                 // controls vehicle response to user input with 0 being extremely soft and 100 begin extremely crisp
 
@@ -469,6 +490,15 @@ public:
     AP_Float                acro_balance_pitch;
     AP_Int8                 acro_trainer;
     AP_Float                acro_rp_expo;
+
+
+    AP_Int32 fly_odometer_km;
+    AP_Int16 fly_odometer_m;
+    AP_Int32 fly_time_hour;
+    AP_Int8  fly_time_minute;
+    AP_Int8  fly_time_second;
+
+    AP_Int16 disarm_hight;
 
     // PI/D controllers
     AC_PI_2D                pi_vel_xy;

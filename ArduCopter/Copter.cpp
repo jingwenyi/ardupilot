@@ -103,6 +103,8 @@ Copter::Copter(void) :
 #endif
     in_mavlink_delay(false),
     gcs_out_of_time(false),
+    need_heading_rest(false),
+    look_at_next_wp_flag(false),
     param_loader(var_info)
 {
     memset(&current_loc, 0, sizeof(current_loc));

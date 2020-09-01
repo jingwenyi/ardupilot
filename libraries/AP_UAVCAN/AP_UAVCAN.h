@@ -194,6 +194,7 @@ private:
 
 public:
     void do_cyclic(void);
+    void do_cyclic_rgbled(uint8_t red, uint8_t green, uint8_t blue);
     bool try_init(void);
 
     void rco_set_safety_pwm(uint32_t chmask, uint16_t pulse_len);

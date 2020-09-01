@@ -62,9 +62,12 @@ public:
         float       current_total_mah;  // total current draw since start-up
         uint32_t    last_time_micros;   // time when voltage and current was last read
         uint32_t    low_voltage_start_ms;  // time when voltage dropped below the minimum
+        uint32_t    low_voltage2_start_ms;
         cells       cell_voltages;      // battery cell voltages in millivolts, 10 cells matches the MAVLink spec
         float       temperature;        // battery temperature in celsius
         uint32_t    temperature_time;   // timestamp of the last recieved temperature message
+        float		copter_voltage;
+		float		steer_voltage;
     };
 
     // Return the number of battery monitor instances
@@ -93,6 +96,13 @@ public:
     float voltage(uint8_t instance) const;
     float voltage() const { return voltage(AP_BATT_PRIMARY_INSTANCE); }
 
+	/// voltage - returns battery voltage in millivolts
+    float copter_voltage(uint8_t instance) const;
+    float copter_voltage() const { return copter_voltage(AP_BATT_PRIMARY_INSTANCE); }
+
+	/// voltage - returns battery voltage in millivolts
+    float steer_voltage(uint8_t instance) const;
+    float steer_voltage() const { return steer_voltage(AP_BATT_PRIMARY_INSTANCE); }
     /// current_amps - returns the instantaneous current draw in amperes
     float current_amps(uint8_t instance) const;
     float current_amps() const { return current_amps(AP_BATT_PRIMARY_INSTANCE); }
@@ -112,6 +122,9 @@ public:
     /// exhausted - returns true if the battery's voltage remains below the low_voltage for 10 seconds or remaining capacity falls below min_capacity
     bool exhausted(uint8_t instance, float low_voltage, float min_capacity_mah);
     bool exhausted(float low_voltage, float min_capacity_mah) { return exhausted(AP_BATT_PRIMARY_INSTANCE, low_voltage, min_capacity_mah); }
+
+    bool exhausted2(uint8_t instance, float low_voltage, float min_capacity_mah);
+    bool exhausted2(float low_voltage, float min_capacity_mah) { return exhausted2(AP_BATT_PRIMARY_INSTANCE, low_voltage, min_capacity_mah); }
 
     /// get_type - returns battery monitor type
     enum BattMonitor_Type get_type() { return get_type(AP_BATT_PRIMARY_INSTANCE); }
@@ -151,6 +164,10 @@ protected:
     AP_Int32    _serial_numbers[AP_BATT_MONITOR_MAX_INSTANCES];     /// battery serial number, automatically filled in on SMBus batteries
 
     AP_Int8     _volt_timeout;
+    AP_Int8     _copter_volt_pin[AP_BATT_MONITOR_MAX_INSTANCES];    /// board pin used to measure battery voltage
+    AP_Int8     _steer_volt_pin[AP_BATT_MONITOR_MAX_INSTANCES];     /// board pin used to measure battery voltage
+
+    AP_Int8    _check_who;
 
 private:
     BattMonitor_State state[AP_BATT_MONITOR_MAX_INSTANCES];

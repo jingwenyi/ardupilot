@@ -338,6 +338,10 @@ void Copter::do_nav_wp(const AP_Mission::Mission_Command& cmd)
             target_loc.set_alt_cm(current_loc.alt, current_loc.get_alt_frame());
         }
     }
+
+    if(wp_highest < target_loc.alt){
+        wp_highest = target_loc.alt;
+    }
     
     // this will be used to remember the time in millis after we reach or pass the WP.
     loiter_time = 0;
@@ -348,7 +352,8 @@ void Copter::do_nav_wp(const AP_Mission::Mission_Command& cmd)
     auto_wp_start(target_loc);
 
     // if no delay set the waypoint as "fast"
-    if (loiter_time_max == 0 ) {
+    AP_Mission::Mission_Command currt_nav_cmd = mission.get_current_nav_cmd();
+    if (currt_nav_cmd.type == MAV_POINT_NORMAL_TAKEPHOTO_WAYPOINT) {
         wp_nav->set_fast_waypoint(true);
     }
 }
@@ -879,6 +884,15 @@ bool Copter::verify_nav_wp(const AP_Mission::Mission_Command& cmd)
 
     // check if timer has run out
     if (((millis() - loiter_time) / 1000) >= loiter_time_max) {
+        //set waypoint complete flag
+        AP_Mission::Mission_Command temp;
+        mission.read_cmd_from_storage(mission.get_current_nav_cmd().index, temp);
+        if(temp.type == MAV_POINT_NORMAL_BEFOREHAND_WAYPOINT || temp.type == MAV_POINT_NORMAL_TAKEPHOTO_WAYPOINT){
+            temp.complete = true;
+            if (!mission.replace_cmd(mission.get_current_nav_cmd().index, temp)){
+                gcs_send_text_fmt(MAV_SEVERITY_INFO, "set waypoint complete flag error\r\n");
+            }
+        }
         gcs_send_text_fmt(MAV_SEVERITY_INFO, "Reached command #%i",cmd.index);
         return true;
     }else{

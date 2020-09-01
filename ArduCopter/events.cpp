@@ -14,7 +14,7 @@ void Copter::failsafe_radio_on_event()
     if (should_disarm_on_failsafe()) {
         init_disarm_motors();
     } else {
-        if (control_mode == AUTO && g.failsafe_throttle == FS_THR_ENABLED_CONTINUE_MISSION) {
+        if ((control_mode == AUTO || control_mode == GUIDED) && g.failsafe_throttle == FS_THR_ENABLED_CONTINUE_MISSION) {
             // continue mission
         } else if (control_mode == LAND && g.failsafe_battery_enabled == FS_BATT_LAND && failsafe.battery) {
             // continue landing
@@ -69,7 +69,39 @@ void Copter::failsafe_battery_event(void)
     gcs_send_text(MAV_SEVERITY_WARNING,"Low battery");
     Log_Write_Error(ERROR_SUBSYSTEM_FAILSAFE_BATT, ERROR_CODE_FAILSAFE_OCCURRED);
 
+     event_report = COPTER_EVENT_REPORT_LOW_BATT_ONE;
+     gcs_send_message(MSG_EVENT_REPORT);
+
 }
+
+void Copter::failsafe_battery_event2(void)
+{
+    // return immediately if low battery event has already been triggered
+    if (failsafe.battery2) {
+        return;
+    }
+
+    // failsafe check
+    if (g.failsafe_battery_enabled != FS_BATT_DISABLED && motors->armed()) {
+        if (should_disarm_on_failsafe()) {
+            init_disarm_motors();
+        } else {
+            set_mode_land_with_pause(MODE_REASON_BATTERY_FAILSAFE2);
+        }
+    }
+
+    // set the low battery flag
+    set_failsafe_battery2(true);
+
+    // warn the ground station and log to dataflash
+    gcs_send_text(MAV_SEVERITY_WARNING,"Low battery2");
+    Log_Write_Error(ERROR_SUBSYSTEM_FAILSAFE_BATT, ERROR_CODE_FAILSAFE_OCCURRED);
+
+     event_report = COPTER_EVENT_REPORT_LOW_BATT_TWO;
+     gcs_send_message(MSG_EVENT_REPORT);
+
+}
+
 
 // failsafe_gcs_check - check for ground station failsafe
 void Copter::failsafe_gcs_check()
@@ -78,7 +110,7 @@ void Copter::failsafe_gcs_check()
 
     // return immediately if gcs failsafe is disabled, gcs has never been connected or we are not overriding rc controls from the gcs and we are not in guided mode
     // this also checks to see if we have a GCS failsafe active, if we do, then must continue to process the logic for recovery from this state.
-    if ((!failsafe.gcs)&&(g.failsafe_gcs == FS_GCS_DISABLED || failsafe.last_heartbeat_ms == 0 || (!failsafe.rc_override_active && control_mode != GUIDED))) {
+    if ((!failsafe.gcs)&&(g.failsafe_gcs == FS_GCS_DISABLED || failsafe.last_heartbeat_ms == 0)) {
         return;
     }
 
@@ -87,7 +119,7 @@ void Copter::failsafe_gcs_check()
     last_gcs_update_ms = millis() - failsafe.last_heartbeat_ms;
 
     // check if all is well
-    if (last_gcs_update_ms < FS_GCS_TIMEOUT_MS) {
+    if (last_gcs_update_ms < g.failsafe_gcs_timeout * 1000) {
         // check for recovery from gcs failsafe
         if (failsafe.gcs) {
             failsafe_gcs_off_event();
@@ -106,10 +138,6 @@ void Copter::failsafe_gcs_check()
     set_failsafe_gcs(true);
     Log_Write_Error(ERROR_SUBSYSTEM_FAILSAFE_GCS, ERROR_CODE_FAILSAFE_OCCURRED);
 
-    // clear overrides so that RC control can be regained with radio.
-    hal.rcin->clear_overrides();
-    failsafe.rc_override_active = false;
-
     if (should_disarm_on_failsafe()) {
         init_disarm_motors();
     } else {
@@ -117,6 +145,9 @@ void Copter::failsafe_gcs_check()
             // continue mission
         } else if (g.failsafe_gcs != FS_GCS_DISABLED) {
             set_mode_RTL_or_land_with_pause(MODE_REASON_GCS_FAILSAFE);
+
+            event_report = COPTER_EVENT_REPORT_RC_GCS_LOSE;
+            gcs_send_message(MSG_EVENT_REPORT);
         }
     }
 }
@@ -241,5 +272,18 @@ bool Copter::should_disarm_on_failsafe() {
 void Copter::update_events()
 {
     ServoRelayEvents.update_events();
+}
+
+
+void Copter::failsafe_distance_check()
+{
+    if(gps.status() >= AP_GPS::GPS_OK_FIX_3D
+        && get_distance(ahrs.get_home(),current_loc) > g.fs_distance_to_home
+        && motors->armed()){
+        set_mode_RTL_or_land_with_pause(MODE_REASON_DISTANCE_CHECK);
+
+        event_report = COPTER_EVENT_REPORT_DISTANCE_PROTECTION;
+        gcs_send_message(MSG_EVENT_REPORT);
+    }
 }
 

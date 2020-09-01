@@ -929,9 +929,9 @@ void Copter::start_logging()
     DataFlash.StartUnstartedLogging();
 }
 
-void Copter::log_init(void)
+void Copter::log_init(const AP_SerialManager& serial_manager_log)
 {
-    DataFlash.Init(log_structure, ARRAY_SIZE(log_structure));
+    DataFlash.Init(log_structure, ARRAY_SIZE(log_structure), serial_manager_log);
     if (!DataFlash.CardInserted()) {
         gcs_send_text(MAV_SEVERITY_WARNING, "No dataflash card inserted");
     } else if (DataFlash.NeedPrep()) {
@@ -994,6 +994,6 @@ void Copter::Log_Write_Optflow() {}
 #endif
 
 void Copter::start_logging() {}
-void Copter::log_init(void) {}
+void Copter::log_init(const AP_SerialManager& serial_manager_log) {}
 
 #endif // LOGGING_ENABLED

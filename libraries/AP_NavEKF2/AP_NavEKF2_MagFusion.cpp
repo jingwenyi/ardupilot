@@ -218,6 +218,19 @@ void NavEKF2_core::SelectMagFusion()
     // check for availability of magnetometer data to fuse
     magDataToFuse = storedMag.recall(magDataDelayed,imuDataDelayed.time_ms);
 
+    if(gpsDataDelayed.hstat == AP_GPS::GPS_OK_FIX_3D_RTK_FIXED){ 
+        //yaw use gps heading
+        return ;
+    }
+
+    if(yaw_switch != YAW_USE_COPASS){
+        //Switch the yaw source and reset the variance matrix.
+        CovarianceInit();
+        offsetSwitchMageFlag = true;
+        yaw_switch = YAW_USE_COPASS;
+        GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "EKF2 IMU%u yaw switch to compass heading",(unsigned)imu_index);
+    }
+
     // Control reset of yaw and magnetic field states if we are using compass data
     if (magDataToFuse && use_compass()) {
         controlMagYawReset();
@@ -833,6 +846,13 @@ void NavEKF2_core::fuseEulerYaw()
     // Calculate the innovation
     float innovation = wrap_PI(predicted_yaw - measured_yaw);
 
+    if(offsetSwitchMageFlag){
+        offsetSwitchMageFlag = false;
+        offsetSwitchMage = innovation;
+    }
+
+    innovation = wrap_PI(innovation - offsetSwitchMage);
+
     // Copy raw value to output variable used for data logging
     innovYaw = innovation;
 
@@ -1124,6 +1144,222 @@ void NavEKF2_core::recordMagReset()
     quatAtLastMagReset = stateStruct.quat;
     yawInnovAtLastMagReset = innovYaw;
 }
+
+
+void NavEKF2_core::FuseGpsHeading()
+{
+    if(!gpsDataDelayed.have_hdg){
+        inflightYawResetRequest = true;
+        return;
+    }
+
+     if(gpsDataDelayed.hstat== AP_GPS::GPS_OK_FIX_3D_RTK_FIXED){
+        if(!yawAlignComplete || !finalInflightYawInit || inflightYawResetRequest){
+
+            if(!yawAlignComplete){
+                //reset yaw use gps heading
+                UseGpsHeadingResetYaw();
+                inflightYawResetRequest = false;
+                // send yaw alignment information to logfile
+                GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "EKF2 IMU%u yaw aligned to GPS heading",(unsigned)imu_index);
+            }
+
+             bool finalResetRequest = false;
+
+             finalResetRequest = (stateStruct.position.z  - posDownAtTakeoff) < -5.0f;
+
+             if(finalResetRequest){
+                //reset yaw use gps heading
+                UseGpsHeadingResetYaw();
+                inflightYawResetRequest = false;
+                // send yaw alignment information to logfile
+                GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "EKF2 IMU%u yaw aligned to GPS heading infight",(unsigned)imu_index);
+             }
+
+             if(inflightYawResetRequest && onGround){
+                //reset yaw use gps heading
+                UseGpsHeadingResetYaw();
+                inflightYawResetRequest = false;
+                // send yaw alignment information to logfile
+                GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "EKF2 IMU%u yaw aligned to GPS heading request reset",(unsigned)imu_index);
+             }
+        }
+
+        if(onGround){
+            finalInflightYawInit = false;
+        }
+
+        if(yaw_switch != YAW_USE_GPS){
+            //Switch the yaw source and reset the variance matrix.
+            CovarianceInit();
+            yaw_switch = YAW_USE_GPS;
+            GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "EKF2 IMU%u yaw switch to GPS heading",(unsigned)imu_index);
+        }
+
+        fuseEulerYawUseGpsHead();
+
+    }else{
+        inflightYawResetRequest = true;
+    }
+}
+
+
+void NavEKF2_core::UseGpsHeadingResetYaw()
+{
+    Vector3f eulerAngles;
+    // previous value used to calculate a reset delta
+    Quaternion prevQuat = stateStruct.quat;
+
+    stateStruct.quat.to_euler(eulerAngles.x, eulerAngles.y, eulerAngles.z);
+
+    float gps_course_rad = ToRad(_ahrs->get_gps().get_heading());
+    // calculate new filter quaternion states from Euler angles
+    stateStruct.quat.from_euler(eulerAngles.x, eulerAngles.y, gps_course_rad);
+
+    // calculate the change in the quaternion state and apply it to the ouput history buffer
+    prevQuat = stateStruct.quat/prevQuat;
+    StoreQuatRotate(prevQuat);
+    // record the yaw reset event
+    recordYawReset();
+    zeroAttCovOnly();
+}
+
+
+void NavEKF2_core::fuseEulerYawUseGpsHead()
+{
+    // gps heading measurement error variance (rad^2)
+    const float R_YAW = sq(frontend->_yawGpsHeadNoise);
+
+    float predicted_yaw;
+    float H_YAW[3];
+
+    H_YAW[0] = 0.0f;
+    H_YAW[1] = 0.0f;
+    H_YAW[2] = 1.0f;
+
+    Vector3f eulerAngles;
+    stateStruct.quat.to_euler(eulerAngles.x, eulerAngles.y, eulerAngles.z);
+    predicted_yaw = eulerAngles.z;
+
+    float measured_yaw;
+    measured_yaw = gpsDataDelayed.hdg;
+
+    // Calculate the innovation
+    float innovation = wrap_PI(predicted_yaw - measured_yaw);
+
+    // Calculate innovation variance and Kalman gains, taking advantage of the fact that only the  first 3 elements in H are non zero
+    float PH[3];
+    float varInnov = R_YAW;
+    for (uint8_t rowIndex=0; rowIndex<=2; rowIndex++) {
+        PH[rowIndex] = 0.0f;
+        for (uint8_t colIndex=0; colIndex<=2; colIndex++) {
+            PH[rowIndex] += P[rowIndex][colIndex];
+        }
+        varInnov += H_YAW[rowIndex]*PH[rowIndex];
+    }
+
+    float varInnovInv;
+    if (varInnov >= R_YAW) {
+        varInnovInv = 1.0f / varInnov;
+        // output numerical health status
+        faultStatus.bad_yaw = false;
+    } else {
+        // the calculation is badly conditioned, so we cannot perform fusion on this step
+        // we reset the covariance matrix and try again next measurement
+        CovarianceInit();
+        // output numerical health status
+        faultStatus.bad_yaw = true;
+        return;
+    }
+
+    // calculate Kalman gain
+    for (uint8_t rowIndex=0; rowIndex<=stateIndexLim; rowIndex++) {
+        Kfusion[rowIndex] = 0.0f;
+        for (uint8_t colIndex=0; colIndex<=2; colIndex++) {
+            Kfusion[rowIndex] += P[rowIndex][colIndex]*H_YAW[colIndex];
+        }
+        Kfusion[rowIndex] *= varInnovInv;
+    }
+
+    Kfusion[0] = Kfusion[1] = 0.0f;
+
+    // calculate the innovation test ratio
+    yawTestRatio = sq(innovation) / (sq(MAX(0.01f * (float)frontend->_yawGHInnovGate, 1.0f)) * varInnov);
+
+     // Declare the magnetometer unhealthy if the innovation test fails
+    if (yawTestRatio > 1.0f) {
+        // On the ground a large innovation could be due to large initial gyro bias or magnetic interference from nearby objects
+        // If we are flying, then it is more likely due to a magnetometer fault and we should not fuse the data
+        if (inFlight) {
+            return;
+        }
+    }
+
+    // limit the innovation so that initial corrections are not too large
+    if (innovation > 0.5f) {
+        innovation = 0.5f;
+    } else if (innovation < -0.5f) {
+        innovation = -0.5f;
+    }
+
+    // correct the covariance using P = P - K*H*P taking advantage of the fact that only the first 3 elements in H are non zero
+    // calculate K*H*P
+    for (uint8_t row = 0; row <= stateIndexLim; row++) {
+        for (uint8_t column = 0; column <= 2; column++) {
+            KH[row][column] = Kfusion[row] * H_YAW[column];
+        }
+    }
+    for (uint8_t row = 0; row <= stateIndexLim; row++) {
+        for (uint8_t column = 0; column <= stateIndexLim; column++) {
+            float tmp = KH[row][0] * P[0][column];
+            tmp += KH[row][1] * P[1][column];
+            tmp += KH[row][2] * P[2][column];
+            KHP[row][column] = tmp;
+        }
+    }
+
+    // Check that we are not going to drive any variances negative and skip the update if so
+    bool healthyFusion = true;
+    for (uint8_t i= 0; i<=stateIndexLim; i++) {
+        if (KHP[i][i] > P[i][i]) {
+            healthyFusion = false;
+        }
+    }
+    if (healthyFusion) {
+        // update the covariance matrix
+        for (uint8_t i= 0; i<=stateIndexLim; i++) {
+            for (uint8_t j= 0; j<=stateIndexLim; j++) {
+                P[i][j] = P[i][j] - KHP[i][j];
+            }
+        }
+
+        // force the covariance matrix to be symmetrical and limit the variances to prevent ill-condiioning.
+        ForceSymmetry();
+        ConstrainVariances();
+
+        // zero the attitude error state - by definition it is assumed to be zero before each observaton fusion
+        stateStruct.angErr.zero();
+
+        // correct the state vector
+        for (uint8_t i=0; i<=stateIndexLim; i++) {
+            statesArray[i] -= Kfusion[i] * innovation;
+        }
+
+        // the first 3 states represent the angular misalignment vector. This is
+        // is used to correct the estimated quaternion on the current time step
+        stateStruct.quat.rotate(stateStruct.angErr);
+
+        // record fusion numerical health status
+        faultStatus.bad_yaw = false;
+
+    } else {
+        // record fusion numerical health status
+        faultStatus.bad_yaw = true;
+    }
+
+}
+
+
 
 
 #endif // HAL_CPU_CLASS

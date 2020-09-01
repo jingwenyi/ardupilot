@@ -53,6 +53,8 @@ class AP_Mount
     friend class AP_Mount_Alexmos;
     friend class AP_Mount_SToRM32;
     friend class AP_Mount_SToRM32_serial;
+    friend class AP_Mount_Z6ka7_Servo;
+    friend class AP_Mount_Z6ka7_serial;
 
 public:
 
@@ -63,7 +65,8 @@ public:
         Mount_Type_SoloGimbal = 2,      /// Solo's gimbal
         Mount_Type_Alexmos = 3,         /// Alexmos mount
         Mount_Type_SToRM32 = 4,         /// SToRM32 mount using MAVLink protocol
-        Mount_Type_SToRM32_serial = 5   /// SToRM32 mount using custom serial protocol
+        Mount_Type_SToRM32_serial = 5,   /// SToRM32 mount using custom serial protocol
+        Mount_Type_Z6ak7_servo = 6
     };
 
     // Constructor

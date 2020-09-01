@@ -75,6 +75,13 @@ static PX4::SPIDeviceManager spi_mgr_instance;
 #define UARTD_DEFAULT_DEVICE "/dev/null"
 #define UARTE_DEFAULT_DEVICE "/dev/null"
 #define UARTF_DEFAULT_DEVICE "/dev/null"
+#elif defined(CONFIG_ARCH_BOARD_UAVRS_V1)
+#define UARTA_DEFAULT_DEVICE "/dev/ttyACM0"	// Usb Mavlink
+#define UARTC_DEFAULT_DEVICE "/dev/ttyS2"	// Telecom MicroHard P900
+#define UARTD_DEFAULT_DEVICE "/dev/ttyS5"	// Rtk com1 ouput position data
+#define UARTB_DEFAULT_DEVICE "/dev/ttyS1"	// Rtk com2 input rtcm data and output raw position data
+#define UARTE_DEFAULT_DEVICE "/dev/ttyS0"	// Backup Gps Ublox M8N
+#define UARTF_DEFAULT_DEVICE "/dev/ttyS4"
 #else
 #define UARTA_DEFAULT_DEVICE "/dev/ttyACM0"
 #define UARTB_DEFAULT_DEVICE "/dev/ttyS3"
@@ -152,6 +159,7 @@ static int main_loop(int argc, char **argv)
     hal.uartC->begin(57600);
     hal.uartD->begin(57600);
     hal.uartE->begin(57600);
+    hal.uartF->begin(57600);
     hal.scheduler->init();
 
     // init the I2C wrapper class

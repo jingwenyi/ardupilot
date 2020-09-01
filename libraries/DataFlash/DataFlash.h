@@ -67,13 +67,14 @@ public:
     void set_mission(const AP_Mission *mission);
 
     // initialisation
-    void Init(const struct LogStructure *structure, uint8_t num_types);
+    void Init(const struct LogStructure *structure, uint8_t num_types, const AP_SerialManager& serial_manager);
     bool CardInserted(void);
 
     // erase handling
     bool NeedErase(void);
     void EraseAll();
-
+    void EraseAllRawData();
+    void EraseAllPosData();
     // possibly expensive calls to start log system:
     bool NeedPrep();
     void Prep();
@@ -89,12 +90,24 @@ public:
     /* Write an *important* block of data at current offset */
     void WriteCriticalBlock(const void *pBuffer, uint16_t size);
 
+    void WriteRawData(const void *pBuffer, uint16_t size);
+
+    void WritePosData(const void *pBuffer, uint16_t size);
+
     // high level interface
     uint16_t find_last_log() const;
     void get_log_boundaries(uint16_t log_num, uint16_t & start_page, uint16_t & end_page);
+    void get_raw_data_boundaries(uint16_t raw_num, uint16_t & start_page, uint16_t & end_page);
+    void get_pos_data_boundaries(uint16_t pos_num, uint16_t & start_page, uint16_t & end_page);
     void get_log_info(uint16_t log_num, uint32_t &size, uint32_t &time_utc);
+    void get_raw_data_info(uint16_t raw_data_num, uint32_t &size, uint32_t &time_utc);
+    void get_pos_data_info(uint16_t raw_data_num, uint32_t &size, uint32_t &time_utc);
     int16_t get_log_data(uint16_t log_num, uint16_t page, uint32_t offset, uint16_t len, uint8_t *data);
+    int16_t get_raw_data(uint16_t raw_num, uint16_t page, uint32_t offset, uint16_t len, uint8_t *data);
+    int16_t get_pos_data(uint16_t pos_num, uint16_t page, uint32_t offset, uint16_t len, uint8_t *data);
     uint16_t get_num_logs(void);
+    uint16_t get_num_raw_data(void);
+    uint16_t get_num_pos_data(void);
     void LogReadProcess(uint16_t log_num,
                                 uint16_t start_page, uint16_t end_page, 
                                 print_mode_fn printMode,
@@ -111,6 +124,10 @@ public:
     void EnableWrites(bool enable);
 
     void StopLogging();
+
+	void StopRawData();
+	
+	void StopPosData();
 
     void Log_Write_Parameter(const char *name, float value);
     void Log_Write_GPS(const AP_GPS &gps, uint8_t instance, uint64_t time_us=0);
@@ -133,6 +150,7 @@ public:
     void Log_Write_Message(const char *message);
     void Log_Write_MessageF(const char *fmt, ...);
     void Log_Write_CameraInfo(enum LogMessages msg, const AP_AHRS &ahrs, const AP_GPS &gps, const Location &current_loc);
+    void Pos_Write_CameraInfo(enum LogMessages msg, const AP_AHRS &ahrs, const AP_GPS &gps, const Location &current_loc);
     void Log_Write_Camera(const AP_AHRS &ahrs, const AP_GPS &gps, const Location &current_loc);
     void Log_Write_Trigger(const AP_AHRS &ahrs, const AP_GPS &gps, const Location &current_loc);    
     void Log_Write_ESC(void);
@@ -141,6 +159,7 @@ public:
     void Log_Write_AttitudeView(AP_AHRS_View &ahrs, const Vector3f &targets);
     void Log_Write_Current(const AP_BattMonitor &battery);
     void Log_Write_Compass(const Compass &compass, uint64_t time_us=0);
+	void Log_Write_Raw_Data(const AP_SerialManager &manager);
     void Log_Write_Mode(uint8_t mode, uint8_t reason = 0);
 
     void Log_Write_EntireMission(const AP_Mission &mission);
@@ -171,6 +190,9 @@ public:
 
     void Log_Write_PID(uint8_t msg_type, const PID_Info &info);
 
+    bool should_raw_data(uint32_t mask) const;
+
+    bool should_pos_data(uint32_t mask) const;
     bool logging_started(void);
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL || CONFIG_HAL_BOARD == HAL_BOARD_LINUX
@@ -202,6 +224,7 @@ public:
         AP_Int8 file_disarm_rot;
         AP_Int8 log_disarmed;
         AP_Int8 log_replay;
+        AP_Int8 save_type;  //0:sdcard 1: serial
     } _params;
 
     const struct LogStructure *structure(uint16_t num) const;
@@ -216,6 +239,10 @@ public:
     void set_vehicle_armed(bool armed_state);
     bool vehicle_is_armed() const { return _armed; }
 
+    bool in_raw_data_download() const { return _in_raw_data_download; }
+    bool in_pos_data_download() const { return _in_pos_data_download; }
+    void set_in_raw_data_download(bool yes) { _in_raw_data_download = yes; }
+    void set_in_pos_data_download(bool yes) { _in_pos_data_download = yes; }
 protected:
 
     const struct LogStructure *_structures;
@@ -286,4 +313,12 @@ private:
     void dump_structures(const struct LogStructure *structures, const uint8_t num_types);
 
     void Log_Write_EKF_Timing(const char *name, uint64_t time_us, const struct ekf_timing &timing);
+
+public:
+    // bolean replicating old vehicle in_raw_data_download flag:
+    bool _in_raw_data_download:1;
+    // bolean replicating old vehicle in_pos_data_download flag:
+    bool _in_pos_data_download:1;
+	// bolean ppk status
+	bool ppk_status:1;
 };

@@ -27,6 +27,7 @@
 #include "ToneAlarm_PX4.h"
 #include "ToshibaLED.h"
 #include "ToshibaLED_I2C.h"
+#include "UAVCanRGBLed.h"
 #include "VRBoard_LED.h"
 #include "DiscreteRGBLed.h"
 #include "DiscoLED.h"
@@ -110,6 +111,9 @@ void AP_Notify::init(bool enable_external_leds)
         _devices[2] = new ToneAlarm_PX4();
         _devices[3] = new Display();
 
+    #elif CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_UAVRS_V1 // Has its own LED board
+        _devices[0] = new UAVCANRGBLed();
+    
     #else   // All other px4 boards use standard devices.
         _devices[0] = new AP_BoardLED();
         _devices[1] = new ToshibaLED_I2C();

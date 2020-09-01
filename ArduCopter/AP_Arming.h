@@ -19,7 +19,7 @@ public:
     bool all_checks_passing(bool arming_from_gcs);
     void pre_arm_rc_checks(bool display_failure);
 
-protected:
+//protected:
 
     bool pre_arm_checks(bool display_failure) override;
     bool pre_arm_gps_checks(bool display_failure);

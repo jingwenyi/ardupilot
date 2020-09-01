@@ -6,6 +6,8 @@
 #include "AP_NavEKF2_core.h"
 #include <AP_AHRS/AP_AHRS.h>
 #include <AP_Vehicle/AP_Vehicle.h>
+#include <GCS_MAVLink/GCS.h>
+
 
 #include <stdio.h>
 
@@ -266,6 +268,11 @@ void NavEKF2_core::SelectVelPosFusion()
         fusePosData = false;
     }
 
+    // use gps heading for yaw
+    if(gpsDataToFuse){
+        FuseGpsHeading();
+    }
+
     // we have GPS data to fuse and a request to align the yaw using the GPS course
     if (gpsYawResetRequest) {
         realignYawGPS();
@@ -276,6 +283,7 @@ void NavEKF2_core::SelectVelPosFusion()
 
     // if we are using GPS, check for a change in receiver and reset position and height
     if (gpsDataToFuse && PV_AidingMode == AID_ABSOLUTE && gpsDataDelayed.sensor_idx != last_gps_idx) {
+        GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "gps sensor idx change:%d\r\n",(unsigned)gpsDataDelayed.sensor_idx);
         // record the ID of the GPS that we are using for the reset
         last_gps_idx = gpsDataDelayed.sensor_idx;
 
@@ -304,27 +312,24 @@ void NavEKF2_core::SelectVelPosFusion()
         // store the time of the reset
         lastPosReset_ms = imuSampleTime_ms;
 
-        // If we are alseo using GPS as the height reference, reset the height
-        if (activeHgtSource == HGT_SOURCE_GPS) {
-            // Store the position before the reset so that we can record the reset delta
-            posResetD = stateStruct.position.z;
+        // Store the position before the reset so that we can record the reset delta
+        posResetD = stateStruct.position.z;
 
-            // write to the state vector
-            stateStruct.position.z = -hgtMea;
+        // write to the state vector
+        stateStruct.position.z = -hgtMea;
 
-            // Calculate the position jump due to the reset
-            posResetD = stateStruct.position.z - posResetD;
+        // Calculate the position jump due to the reset
+        posResetD = stateStruct.position.z - posResetD;
 
-            // Add the offset to the output observer states
-            outputDataNew.position.z += posResetD;
-            outputDataDelayed.position.z += posResetD;
-            for (uint8_t i=0; i<imu_buffer_length; i++) {
-                storedOutput[i].position.z += posResetD;
-            }
-
-            // store the time of the reset
-            lastPosResetD_ms = imuSampleTime_ms;
+        // Add the offset to the output observer states
+        outputDataNew.position.z += posResetD;
+        outputDataDelayed.position.z += posResetD;
+        for (uint8_t i=0; i<imu_buffer_length; i++) {
+            storedOutput[i].position.z += posResetD;
         }
+
+        // store the time of the reset
+        lastPosResetD_ms = imuSampleTime_ms;
     }
 
     // If we are operating without any aiding, fuse in the last known position
@@ -791,7 +796,11 @@ void NavEKF2_core::selectHeightForFusion()
                 activeHgtSource = HGT_SOURCE_RNG;
             }
         }
-    } else if ((frontend->_altSource == 2) && ((imuSampleTime_ms - lastTimeGpsReceived_ms) < 500) && validOrigin && gpsAccuracyGood) {
+    } else if ((frontend->_altSource == 2)
+        && ((imuSampleTime_ms - lastTimeGpsReceived_ms) < 500)
+        && validOrigin
+        && gpsAccuracyGood
+        && gpsDataDelayed.stat == AP_GPS::GPS_OK_FIX_3D_RTK_FIXED) {
         activeHgtSource = HGT_SOURCE_GPS;
     } else if ((frontend->_altSource == 3) && validOrigin && rngBcnGoodToAlign) {
         activeHgtSource = HGT_SOURCE_BCN;

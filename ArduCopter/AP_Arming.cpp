@@ -26,7 +26,7 @@ bool AP_Arming_Copter::all_checks_passing(bool arming_from_gcs)
         return false;
     }
 
-    return copter.ap.pre_arm_check && arm_checks(true, arming_from_gcs);
+    return copter.ap.pre_arm_check;
 }
 
 // perform pre-arm checks and set ap.pre_arm_check flag
@@ -37,6 +37,17 @@ bool AP_Arming_Copter::pre_arm_checks(bool display_failure)
     // exit immediately if already armed
     if (copter.motors->armed()) {
         return true;
+    }
+
+    if(copter.load_param_flag != Copter::LOAD_PARAM_OK){
+        if (display_failure) {
+            if(copter.load_param_flag == Copter::LOAD_PARAM_FAILED){
+                gcs_send_text(MAV_SEVERITY_CRITICAL, "PreArm:init load parameter error");
+            }else if(copter.load_param_flag == Copter::PARAM_VERSION_ERR){
+                gcs_send_text(MAV_SEVERITY_CRITICAL, "PreArm:init parameter version error");
+            }
+        }
+        return false;
     }
 
     // check if motor interlock and Emergency Stop aux switches are used
@@ -80,11 +91,11 @@ bool AP_Arming_Copter::pre_arm_checks(bool display_failure)
         & gps_checks(display_failure)
         & fence_checks(display_failure)
         & ins_checks(display_failure)
-        & board_voltage_checks(display_failure)
         & logging_checks(display_failure)
         & parameter_checks(display_failure)
         & motor_checks(display_failure)
-        & pilot_throttle_checks(display_failure);
+        & pilot_throttle_checks(display_failure)
+        & AP_Arming::battery_checks(display_failure);
 }
 
 bool AP_Arming_Copter::rc_calibration_checks(bool display_failure)
@@ -127,9 +138,7 @@ bool AP_Arming_Copter::compass_checks(bool display_failure)
     bool ret = AP_Arming::compass_checks(display_failure);
 
     if ((checks_to_perform == ARMING_CHECK_ALL) || (checks_to_perform & ARMING_CHECK_COMPASS)) {
-        // check compass offsets have been set.  AP_Arming only checks
-        // this if learning is off; Copter *always* checks.
-        if (!_compass.configured()) {
+        if (!_compass.learn_offsets_enabled() && !_compass.configured()) {
             if (display_failure) {
                 gcs_send_text(MAV_SEVERITY_CRITICAL,"PreArm: Compass not calibrated");
             }
@@ -427,12 +436,6 @@ bool AP_Arming_Copter::pre_arm_gps_checks(bool display_failure)
     // if circular or polygon fence is enabled we need GPS
     fence_requires_gps = (copter.fence.get_enabled_fences() & (AC_FENCE_TYPE_CIRCLE | AC_FENCE_TYPE_POLYGON)) > 0;
     #endif
-
-    // return true if GPS is not required
-    if (!mode_requires_gps && !fence_requires_gps) {
-        AP_Notify::flags.pre_arm_gps_check = true;
-        return true;
-    }
 
     // ensure GPS is ok
     if (!copter.position_ok()) {

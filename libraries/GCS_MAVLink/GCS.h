@@ -72,6 +72,9 @@ enum ap_message {
     MSG_ADSB_VEHICLE,
     MSG_BATTERY_STATUS,
     MSG_AOA_SSA,
+    MSG_INDICATOR,
+    MSG_P900_ID,
+    MSG_EVENT_REPORT,
     MSG_RETRY_DEFERRED // this must be last
 };
 
@@ -161,6 +164,9 @@ public:
     void send_ekf_origin(const Location &ekf_origin) const;
     static void send_ekf_origin_all(const Location &ekf_origin);
     void send_heartbeat(uint8_t type, uint8_t base_mode, uint32_t custom_mode, uint8_t system_status);
+    void send_indicator(uint32_t indicator_status, float rtk_heading, float compass_heading, uint32_t odometer, uint32_t time);
+    void send_p900_id(uint8_t *return_p900_id, uint8_t count);
+    void send_event_report(uint8_t event_reprot);
     void send_servo_output_raw(bool hil);
     static void send_collision_all(const AP_Avoidance::Obstacle &threat, MAV_COLLISION_ACTION behaviour);
     void send_accelcal_vehicle_position(uint8_t position);
@@ -229,6 +235,8 @@ protected:
     uint8_t packet_overhead(void) const { return packet_overhead_chan(chan); }
 
     void handle_log_send(DataFlash_Class &dataflash);
+    void handle_raw_data_send(DataFlash_Class &dataflash);
+    void handle_pos_data_send(DataFlash_Class &dataflash);
 
     // saveable rate of each stream
     AP_Int16        streamRates[NUM_STREAMS];
@@ -244,6 +252,7 @@ protected:
     void handle_mission_count(AP_Mission &mission, mavlink_message_t *msg);
     void handle_mission_write_partial_list(AP_Mission &mission, mavlink_message_t *msg);
     bool handle_mission_item(mavlink_message_t *msg, AP_Mission &mission);
+    void handle_single_point_message(AP_Mission &mission, mavlink_message_t *msg);
 
     void handle_param_set(mavlink_message_t *msg, DataFlash_Class *DataFlash);
     void handle_param_request_list(mavlink_message_t *msg);
@@ -257,6 +266,7 @@ protected:
 
     void handle_common_message(mavlink_message_t *msg);
     void handle_log_message(mavlink_message_t *msg, DataFlash_Class &dataflash);
+    void handle_ppk_message(mavlink_message_t *msg, DataFlash_Class &dataflash);
     void handle_setup_signing(const mavlink_message_t *msg);
     uint8_t handle_preflight_reboot(const mavlink_command_long_t &packet, bool disable_overrides);
     uint8_t handle_rc_bind(const mavlink_command_long_t &packet);
@@ -347,6 +357,61 @@ private:
 
     // start page of log data
     uint16_t _log_data_page;
+////////////////////////////////////////////////////////////////
+    uint8_t  _raw_data_listing:1; // sending raw_data list
+    uint8_t  _raw_data_sending:1; // sending raw_data data
+
+    // next raw_data list entry to send
+    uint16_t _raw_data_next_list_entry;
+
+    // last raw_data list entry to send
+    uint16_t _raw_data_last_list_entry;
+
+    // number of raw_data files
+    uint16_t _raw_data_num;
+
+    // raw_data number for data send
+    uint16_t _raw_data_num_data;
+
+    // offset in raw_data
+    uint32_t _raw_data_data_offset;
+
+    // size of raw_data file
+    uint32_t _raw_data_data_size;
+
+    // number of bytes left to send
+    uint32_t _raw_data_data_remaining;
+
+    // start page of raw_data data
+    uint16_t _raw_data_data_page;
+////////////////////////////////////////////////////////////////
+
+    uint8_t  _pos_data_listing:1; // sending pos_data list
+    uint8_t  _pos_data_sending:1; // sending pos_data data
+
+    // next pos_data list entry to send
+    uint16_t _pos_data_next_list_entry;
+
+    // last pos_data list entry to send
+    uint16_t _pos_data_last_list_entry;
+
+    // number of pos_data files
+    uint16_t _pos_data_num;
+
+    // pos_data number for data send
+    uint16_t _pos_data_num_data;
+
+    // offset in pos_data
+    uint32_t _pos_data_data_offset;
+
+    // size of pos_data file
+    uint32_t _pos_data_data_size;
+
+    // number of bytes left to send
+    uint32_t _pos_data_data_remaining;
+
+   // start page of pos_data data
+    uint16_t _pos_data_data_page;
 
     // perf counters
     static AP_HAL::Util::perf_counter_t _perf_packet;
@@ -419,6 +484,23 @@ private:
     void handle_log_send_listing(DataFlash_Class &dataflash);
     bool handle_log_send_data(DataFlash_Class &dataflash);
 
+    bool should_handle_raw_data_message();
+    void handle_raw_data_message(mavlink_message_t *msg, DataFlash_Class &dataflash);
+    void handle_raw_data_request_list(mavlink_message_t *msg, DataFlash_Class &dataflash);
+    void handle_raw_data_request_data(mavlink_message_t *msg, DataFlash_Class &dataflash);
+    void handle_raw_data_request_erase(mavlink_message_t *msg, DataFlash_Class &dataflash);
+    void handle_raw_data_request_end(mavlink_message_t *msg, DataFlash_Class &dataflash);
+    void handle_raw_data_send_listing(DataFlash_Class &dataflash);
+    bool handle_raw_data_send_data(DataFlash_Class &dataflash);
+
+    bool should_handle_pos_data_message();
+    void handle_pos_data_message(mavlink_message_t *msg, DataFlash_Class &dataflash);
+    void handle_pos_data_request_list(mavlink_message_t *msg, DataFlash_Class &dataflash);
+    void handle_pos_data_request_data(mavlink_message_t *msg, DataFlash_Class &dataflash);
+    void handle_pos_data_request_erase(mavlink_message_t *msg, DataFlash_Class &dataflash);
+    void handle_pos_data_request_end(mavlink_message_t *msg, DataFlash_Class &dataflash);
+    void handle_pos_data_send_listing(DataFlash_Class &dataflash);
+    bool handle_pos_data_send_data(DataFlash_Class &dataflash);
 
     void lock_channel(mavlink_channel_t chan, bool lock);
 

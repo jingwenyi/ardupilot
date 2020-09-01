@@ -23,7 +23,7 @@ extern const AP_HAL::HAL& hal;
 
 
 // initialisation
-void DataFlash_MAVLink::Init()
+void DataFlash_MAVLink::Init(const AP_SerialManager& serial_manager)
 {
     semaphore = hal.util->new_semaphore();
     if (semaphore == nullptr) {
@@ -31,7 +31,7 @@ void DataFlash_MAVLink::Init()
         return;
     }
 
-    DataFlash_Backend::Init();
+    DataFlash_Backend::Init(serial_manager);
 
     _blocks = nullptr;
     while (_blockcount >= 8) { // 8 is a *magic* number

@@ -22,6 +22,8 @@ public:
 
     // erase handling
     virtual void EraseAll() = 0;
+	virtual void EraseAllRawData() = 0;
+	virtual void EraseAllPosData() = 0;
 
     virtual bool NeedPrep() = 0;
     virtual void Prep() = 0;
@@ -36,13 +38,35 @@ public:
     }
 
     virtual bool WritePrioritisedBlock(const void *pBuffer, uint16_t size, bool is_critical) = 0;
+    /* Write a block of data at current offset */
+    bool WriteRawData(const void *pBuffer, uint16_t size) {
+        return WriteRawData(pBuffer, size, false);
+	}
 
+    bool WriteRawData(const void *pBuffer, uint16_t size, bool is_critical);
+
+    /* Write a block of data at current offset */
+    bool WritePosData(const void *pBuffer, uint16_t size) {
+        return WritePosData(pBuffer, size, false);
+	}
+
+    bool WritePosData(const void *pBuffer, uint16_t size, bool is_critical);
     // high level interface
     virtual uint16_t find_last_log() = 0;
+	virtual uint16_t find_last_raw_data() = 0;
+	virtual uint16_t find_last_pos_data() = 0;
     virtual void get_log_boundaries(uint16_t log_num, uint16_t & start_page, uint16_t & end_page) = 0;
+    virtual void get_raw_data_boundaries(uint16_t raw_num, uint16_t & start_page, uint16_t & end_page) = 0;
+    virtual void get_pos_data_boundaries(uint16_t pos_num, uint16_t & start_page, uint16_t & end_page) = 0;
     virtual void get_log_info(uint16_t log_num, uint32_t &size, uint32_t &time_utc) = 0;
+    virtual void get_raw_data_info(uint16_t raw_num, uint32_t &size, uint32_t &time_utc) = 0;
+    virtual void get_pos_data_info(uint16_t pos_num, uint32_t &size, uint32_t &time_utc) = 0;
     virtual int16_t get_log_data(uint16_t log_num, uint16_t page, uint32_t offset, uint16_t len, uint8_t *data) = 0;
+    virtual int16_t get_raw_data(uint16_t raw_num, uint16_t page, uint32_t offset, uint16_t len, uint8_t *data) = 0;
+    virtual int16_t get_pos_data(uint16_t pos_num, uint16_t page, uint32_t offset, uint16_t len, uint8_t *data) = 0;
     virtual uint16_t get_num_logs() = 0;
+    virtual uint16_t get_num_raw_data() = 0;
+    virtual uint16_t get_num_pos_data() = 0;
     virtual void LogReadProcess(const uint16_t list_entry,
                                 uint16_t start_page, uint16_t end_page,
                                 print_mode_fn printMode,
@@ -54,7 +78,11 @@ public:
     void EnableWrites(bool enable) { _writes_enabled = enable; }
     virtual bool logging_started(void) const { return log_write_started; }
 
-    virtual void Init() {
+    virtual bool raw_data_started(void) const = 0;
+	
+    virtual bool pos_data_started(void) const = 0;
+	
+    virtual void Init(const AP_SerialManager& serial_manager) {
         _writes_enabled = true;
     }
 
@@ -64,7 +92,9 @@ public:
 
     virtual uint16_t start_new_log(void) = 0;
     bool log_write_started;
+	virtual uint16_t start_new_raw_data(void) = 0;
 
+	virtual uint16_t start_new_pos_data(void) = 0;
     /* stop logging - close output files etc etc.
      *
      * note that this doesn't stop logging from starting up again
@@ -73,6 +103,10 @@ public:
      */
     virtual void stop_logging(void) = 0;
 
+	virtual void stop_raw_data(void) = 0;
+	
+	virtual void stop_pos_data(void) = 0;
+	
     void Log_Fill_Format(const struct LogStructure *structure, struct log_Format &pkt);
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL || CONFIG_HAL_BOARD == HAL_BOARD_LINUX
@@ -140,8 +174,12 @@ protected:
                           print_mode_fn print_mode,
                           AP_HAL::BetterStream *port);
 
+    bool ShouldPosData();
     virtual bool WritesOK() const;
-
+    virtual bool RawDataWritesOK() const = 0;
+    virtual bool PosDataWritesOK() const = 0;
+    virtual bool StartNewRawDataOK() const;
+    virtual bool StartNewPosDataOK() const;
     bool _writes_enabled = false;
 
     /*
@@ -162,6 +200,13 @@ protected:
     // must be called when a new log is being started:
     virtual void start_new_log_reset_variables();
 
+    virtual bool _WriteRawData(const void *pBuffer, uint16_t size, bool is_critical) = 0;
+	
+    virtual bool ReadRawData(void *pkt, uint16_t size) = 0;
+
+    virtual bool _WritePosData(const void *pBuffer, uint16_t size, bool is_critical) = 0;
+	
+    virtual bool ReadPosData(void *pkt, uint16_t size) = 0;
 private:
 
     uint32_t _last_periodic_1Hz;

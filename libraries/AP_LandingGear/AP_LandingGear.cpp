@@ -31,7 +31,7 @@ const AP_Param::GroupInfo AP_LandingGear::var_info[] = {
     // @Description: Landing Gear Startup behaviour control
     // @Values: 0:WaitForPilotInput, 1:Retract, 2:Deploy
     // @User: Standard
-    AP_GROUPINFO("STARTUP", 2, AP_LandingGear, _startup_behaviour, (uint8_t)AP_LandingGear::LandingGear_Startup_WaitForPilotInput),
+    AP_GROUPINFO("STARTUP", 2, AP_LandingGear, _startup_behaviour, (uint8_t)AP_LandingGear::LandingGear_Startup_Retract),
 
     AP_GROUPEND
 };

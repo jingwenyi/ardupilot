@@ -9,6 +9,8 @@
 #define PX4_GPIO_EXT_IO_RELAY2_PIN      114
 #define PX4_GPIO_EXT_IO_ACC1_PIN        115
 #define PX4_GPIO_EXT_IO_ACC2_PIN        116
+#define PX4_GPIO_CAMER_TRRIGER_RELAY_PIN 117
+#define PX4_GPIO_CAMER_FEEDBACK_INPUT_PIN 118
 
 /*
   start servo channels used as GPIO at 50. Pin 50 is
@@ -45,6 +47,11 @@ public:
 
     // used by UART code to avoid a hw bug in the AUAV-X2
     void set_usb_connected(void) { _usb_connected = true; }
+	/* return true if imu data ready */
+	bool imu_data_ready(void) override;
+
+	/* reset imu by hardware io */
+	void imu_reset(bool) override;
 
 private:
     int _led_fd = -1;

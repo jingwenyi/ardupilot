@@ -35,6 +35,8 @@ public:
 
     // return the current temperature in degrees C, if available
     virtual bool get_temperature(float &temperature) = 0;
+	
+    virtual void handle_as_msg(uint16_t pressure, uint16_t temperature, uint16_t pressure2, uint16_t temperature2){};
 
 protected:
     int8_t get_pin(void) const;
@@ -66,7 +68,10 @@ protected:
     void set_offset(float ofs) {
         frontend.param[instance].offset.set(ofs);
     }
-    
+
+	uint8_t get_instance() {
+		return instance;
+	}
 private:
     AP_Airspeed &frontend;
     uint8_t instance;

@@ -16,6 +16,7 @@
 #include "AP_InertialSensor_L3G4200D.h"
 #include "AP_InertialSensor_LSM9DS0.h"
 #include "AP_InertialSensor_Invensense.h"
+#include "AP_InertialSensor_ADIS16XXX.h"
 #include "AP_InertialSensor_PX4.h"
 #include "AP_InertialSensor_QURT.h"
 #include "AP_InertialSensor_SITL.h"
@@ -423,6 +424,10 @@ const AP_Param::GroupInfo AP_InertialSensor::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("FAST_SAMPLE",  36, AP_InertialSensor, _fast_sampling_mask,   0),
 
+    AP_GROUPINFO("IMU_ADIS",  37, AP_InertialSensor, _imu_adis,   ROTATION_YAW_270),
+
+    AP_GROUPINFO("IMU_LOW",  38, AP_InertialSensor, _imu_low,   ROTATION_ROLL_180_YAW_90),
+
     /*
       NOTE: parameter indexes have gaps above. When adding new
       parameters check for conflicts carefully
@@ -643,6 +648,10 @@ AP_InertialSensor::init(uint16_t sample_rate)
     _next_sample_usec = 0;
     _last_sample_usec = 0;
     _have_sample = false;
+
+    for(uint8_t i=0; i<_backend_count; i++){
+        _imu_type[i] = _backends[i]->get_imu_type();
+    }
 }
 
 bool AP_InertialSensor::_add_backend(AP_InertialSensor_Backend *backend)
@@ -755,6 +764,11 @@ AP_InertialSensor::detect_backends(void)
         _fast_sampling_mask.set_default(1);
         _add_backend(AP_InertialSensor_Invensense::probe(*this, hal.spi->get_device(HAL_INS_MPU6500_NAME), ROTATION_YAW_270));
         break;
+	case AP_BoardConfig::PX4_BOARD_UAVRS:
+		_fast_sampling_mask.set_default(1);
+		_add_backend(AP_InertialSensor_ADIS16XXX::probe(*this, hal.spi->get_device(HAL_INS_ADIS16XXX_NAME), (enum Rotation)_imu_adis.get()));
+        _add_backend(AP_InertialSensor_Invensense::probe(*this, hal.spi->get_device(HAL_INS_MPU9250_NAME), (enum Rotation)_imu_low.get()));
+		break;
 
     default:
         break;

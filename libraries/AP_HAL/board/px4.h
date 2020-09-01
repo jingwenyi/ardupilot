@@ -3,8 +3,10 @@
 #define HAL_BOARD_NAME "PX4"
 #define HAL_CPU_CLASS HAL_CPU_CLASS_150
 #define HAL_OS_POSIX_IO 1
-#define HAL_BOARD_LOG_DIRECTORY "/fs/microsd/APM/LOGS"
-#define HAL_BOARD_TERRAIN_DIRECTORY "/fs/microsd/APM/TERRAIN"
+#define HAL_BOARD_LOG_DIRECTORY "/fs/microsd/UAVRS/LOGS"
+#define HAL_BOARD_RAW_DATA_DIRECTORY "/fs/microsd/UAVRS/RAW_DATA"
+#define HAL_BOARD_POS_DATA_DIRECTORY "/fs/microsd/UAVRS/POS_DATA"
+#define HAL_BOARD_TERRAIN_DIRECTORY "/fs/microsd/UAVRS/TERRAIN"
 #define HAL_PARAM_DEFAULTS_PATH "/etc/defaults.parm"
 #define HAL_INS_DEFAULT HAL_INS_PX4
 #define HAL_BARO_DEFAULT HAL_BARO_PX4
@@ -42,6 +44,10 @@
 // we don't have any sdcard
 #undef HAL_BOARD_LOG_DIRECTORY
 #undef HAL_BOARD_TERRAIN_DIRECTORY
+#elif defined(CONFIG_ARCH_BOARD_UAVRS_V1)
+#define CONFIG_HAL_BOARD_SUBTYPE HAL_BOARD_SUBTYPE_UAVRS_V1
+#define HAL_STORAGE_SIZE            (16384+20*1024)
+#define HAL_WITH_UAVCAN             1
 #else
 #error "Unknown PX4 board type"
 #endif
@@ -77,6 +83,9 @@
 #define HAL_COMPASS_HMC5843_NAME "hmc5843"
 #define HAL_COMPASS_LIS3MDL_NAME "lis3mdl"
 
+#define HAL_INS_ADIS16XXX_NAME "adis16375"
+
+
 /* px4fmu-v1 */
 #ifdef CONFIG_ARCH_BOARD_PX4FMU_V1
 #define HAL_BARO_MS5611_I2C_ADDR 0x76
@@ -103,6 +112,11 @@
 #define HAL_PX4_HAVE_MTD_SUPPORT 0
 #define HAL_PX4_HAVE_PX4IO 0
 #define HAL_PX4_HAVE_PWM_INPUT 0
+#endif
+
+/* uavrs-v1 */
+#ifdef CONFIG_ARCH_BOARD_UAVRS_V1
+#define HAL_PX4_HAVE_PX4IO 0
 #endif
 
 /* default values */

@@ -15,6 +15,7 @@
 #include <AP_Mission/AP_Mission.h>
 #include <AP_Airspeed/AP_Airspeed.h>
 #include <AP_BattMonitor/AP_BattMonitor.h>
+#include <AP_SerialManager/AP_SerialManager.h>
 #include <AP_RPM/AP_RPM.h>
 #include <AP_RangeFinder/AP_RangeFinder.h>
 #include <DataFlash/LogStructure.h>
@@ -69,12 +70,14 @@ public:
     void set_mission(const AP_Mission *mission);
 
     // initialisation
-    void Init(const struct LogStructure *structure, uint8_t num_types);
+    void Init(const struct LogStructure *structure, uint8_t num_types, const AP_SerialManager& serial_manager);
     bool CardInserted(void);
 
     // erase handling
     bool NeedErase(void);
     void EraseAll();
+	void EraseAllRawData();
+	void EraseAllPosData();
 
     // get a pointer to structures
     const struct LogStructure *get_structures(uint8_t &num_types) {
@@ -87,11 +90,21 @@ public:
     /* Write an *important* block of data at current offset */
     void WriteCriticalBlock(const void *pBuffer, uint16_t size);
 
+    void WriteRawData(const void *pBuffer, uint16_t size);
+
+    void WritePosData(const void *pBuffer, uint16_t size);
+
     // high level interface
     uint16_t find_last_log() const;
     void get_log_boundaries(uint16_t log_num, uint16_t & start_page, uint16_t & end_page);
+    void get_raw_data_boundaries(uint16_t raw_num, uint16_t & start_page, uint16_t & end_page);
+    void get_pos_data_boundaries(uint16_t pos_num, uint16_t & start_page, uint16_t & end_page);
     int16_t get_log_data(uint16_t log_num, uint16_t page, uint32_t offset, uint16_t len, uint8_t *data);
+    int16_t get_raw_data(uint16_t raw_num, uint16_t page, uint32_t offset, uint16_t len, uint8_t *data);
+    int16_t get_pos_data(uint16_t pos_num, uint16_t page, uint32_t offset, uint16_t len, uint8_t *data);
     uint16_t get_num_logs(void);
+    uint16_t get_num_raw_data(void);
+    uint16_t get_num_pos_data(void);
     void LogReadProcess(uint16_t log_num,
                                 uint16_t start_page, uint16_t end_page, 
                                 print_mode_fn printMode,
@@ -108,6 +121,10 @@ public:
     bool WritesEnabled() const { return _writes_enabled; }
 
     void StopLogging();
+
+	void StopRawData();
+	
+	void StopPosData();
 
     void Log_Write_Parameter(const char *name, float value);
     void Log_Write_GPS(const AP_GPS &gps, uint8_t instance, uint64_t time_us=0);
@@ -130,6 +147,7 @@ public:
     void Log_Write_Message(const char *message);
     void Log_Write_MessageF(const char *fmt, ...);
     void Log_Write_CameraInfo(enum LogMessages msg, const AP_AHRS &ahrs, const AP_GPS &gps, const Location &current_loc);
+    void Pos_Write_CameraInfo(enum LogMessages msg, const AP_AHRS &ahrs, const AP_GPS &gps, const Location &current_loc);
     void Log_Write_Camera(const AP_AHRS &ahrs, const AP_GPS &gps, const Location &current_loc);
     void Log_Write_Trigger(const AP_AHRS &ahrs, const AP_GPS &gps, const Location &current_loc);    
     void Log_Write_ESC(void);
@@ -138,6 +156,7 @@ public:
     void Log_Write_AttitudeView(AP_AHRS_View &ahrs, const Vector3f &targets);
     void Log_Write_Current(const AP_BattMonitor &battery);
     void Log_Write_Compass(const Compass &compass, uint64_t time_us=0);
+	void Log_Write_Raw_Data(const AP_SerialManager &manager);
     void Log_Write_Mode(uint8_t mode, uint8_t reason = 0);
 
     void Log_Write_EntireMission(const AP_Mission &mission);
@@ -171,6 +190,10 @@ public:
 
     // returns true if logging of a message should be attempted
     bool should_log(uint32_t mask) const;
+	
+    bool should_raw_data(uint32_t mask) const;
+
+    bool should_pos_data(uint32_t mask) const;
 
     bool logging_started(void);
 
@@ -200,6 +223,7 @@ public:
         AP_Int8 file_disarm_rot;
         AP_Int8 log_disarmed;
         AP_Int8 log_replay;
+        AP_Int8 save_type;  //0:sdcard 1: serial
     } _params;
 
     const struct LogStructure *structure(uint16_t num) const;
@@ -215,7 +239,11 @@ public:
     bool vehicle_is_armed() const { return _armed; }
 
     void handle_log_send(class GCS_MAVLINK &);
+    void handle_raw_data_send(class GCS_MAVLINK &);
+    void handle_pos_data_send(class GCS_MAVLINK &);
     bool in_log_download() const { return _in_log_download; }
+    bool in_raw_data_download() const { return _in_raw_data_download; }
+    bool in_pos_data_download() const { return _in_pos_data_download; }
 
 protected:
 
@@ -338,6 +366,99 @@ private:
     bool handle_log_send_data(class GCS_MAVLINK &);
 
     void get_log_info(uint16_t log_num, uint32_t &size, uint32_t &time_utc);
-    /* end support for retrieving logs via mavlink: */
+    /* support for retrieving logs via mavlink: */
+	
+    uint8_t  _raw_data_listing:1; // sending raw_data list
+    uint8_t  _raw_data_sending:1; // sending raw_data data
 
+    // bolean replicating old vehicle in_raw_data_download flag:
+    bool _in_raw_data_download:1;
+
+    // next raw_data list entry to send
+    uint16_t _raw_data_next_list_entry;
+
+    // last raw_data list entry to send
+    uint16_t _raw_data_last_list_entry;
+
+    // number of raw_data files
+    uint16_t _raw_data_num;
+
+    // raw_data number for data send
+    uint16_t _raw_data_num_data;
+
+    // offset in raw_data
+    uint32_t _raw_data_data_offset;
+
+    // size of raw_data file
+    uint32_t _raw_data_data_size;
+
+    // number of bytes left to send
+    uint32_t _raw_data_data_remaining;
+
+    // start page of raw_data data
+    uint16_t _raw_data_data_page;
+
+    int8_t _raw_data_sending_chan = -1;
+
+    bool should_handle_raw_data_message();
+    void handle_raw_data_message(class GCS_MAVLINK &, mavlink_message_t *msg);
+
+    void handle_raw_data_request_list(class GCS_MAVLINK &, mavlink_message_t *msg);
+    void handle_raw_data_request_data(class GCS_MAVLINK &, mavlink_message_t *msg);
+    void handle_raw_data_request_erase(class GCS_MAVLINK &, mavlink_message_t *msg);
+    void handle_raw_data_request_end(class GCS_MAVLINK &, mavlink_message_t *msg);
+    void handle_raw_data_send_listing(class GCS_MAVLINK &);
+    bool handle_raw_data_send_data(class GCS_MAVLINK &);
+
+	
+    void get_raw_data_info(uint16_t raw_data_num, uint32_t &size, uint32_t &time_utc);
+    /* end support for retrieving raw_datas via mavlink: */
+
+	uint8_t  _pos_data_listing:1; // sending pos_data list
+    uint8_t  _pos_data_sending:1; // sending pos_data data
+
+    // bolean replicating old vehicle in_pos_data_download flag:
+    bool _in_pos_data_download:1;
+
+    // next pos_data list entry to send
+    uint16_t _pos_data_next_list_entry;
+
+    // last pos_data list entry to send
+    uint16_t _pos_data_last_list_entry;
+
+    // number of pos_data files
+    uint16_t _pos_data_num;
+
+    // pos_data number for data send
+    uint16_t _pos_data_num_data;
+
+    // offset in pos_data
+    uint32_t _pos_data_data_offset;
+
+    // size of pos_data file
+    uint32_t _pos_data_data_size;
+
+    // number of bytes left to send
+    uint32_t _pos_data_data_remaining;
+
+	// start page of pos_data data
+	uint16_t _pos_data_data_page;
+	
+	int8_t _pos_data_sending_chan = -1;
+	
+	bool should_handle_pos_data_message();
+    void handle_pos_data_message(class GCS_MAVLINK &, mavlink_message_t *msg);
+
+    void handle_pos_data_request_list(class GCS_MAVLINK &, mavlink_message_t *msg);
+    void handle_pos_data_request_data(class GCS_MAVLINK &, mavlink_message_t *msg);
+    void handle_pos_data_request_erase(class GCS_MAVLINK &, mavlink_message_t *msg);
+    void handle_pos_data_request_end(class GCS_MAVLINK &, mavlink_message_t *msg);
+    void handle_pos_data_send_listing(class GCS_MAVLINK &);
+    bool handle_pos_data_send_data(class GCS_MAVLINK &);
+
+	
+    void get_pos_data_info(uint16_t pos_data_num, uint32_t &size, uint32_t &time_utc);
+    /* end support for retrieving pos_datas via mavlink: */
+public:
+	bool ppk_status;
 };

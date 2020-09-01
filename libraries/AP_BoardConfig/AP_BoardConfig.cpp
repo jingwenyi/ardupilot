@@ -44,6 +44,9 @@
 #define BOARD_SER1_RTSCTS_DEFAULT 0
 # undef BOARD_SAFETY_ENABLE_DEFAULT
 # define BOARD_SAFETY_ENABLE_DEFAULT 0
+#elif defined(CONFIG_ARCH_BOARD_UAVRS_V1)
+#define BOARD_PWM_COUNT_DEFAULT 8
+#define BOARD_SER1_RTSCTS_DEFAULT 2
 #else // V2
 #define BOARD_PWM_COUNT_DEFAULT 4
 #define BOARD_SER1_RTSCTS_DEFAULT 2
@@ -106,7 +109,7 @@ const AP_Param::GroupInfo AP_BoardConfig::var_info[] = {
     // @Values: 0:Disabled,1:Enabled
     // @RebootRequired: True
     // @User: Standard
-    AP_GROUPINFO("SAFETYENABLE",   3, AP_BoardConfig, px4.safety_enable, BOARD_SAFETY_ENABLE_DEFAULT),
+    AP_GROUPINFO("SAFETYENABLE",   3, AP_BoardConfig, px4.safety_enable, 0),
 #endif
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_PX4

@@ -10,16 +10,16 @@
 
 // once the logging code is all converted we will remove these from
 // this header
-#define HEAD_BYTE1  0xA3    // Decimal 163
-#define HEAD_BYTE2  0x95    // Decimal 149
+#define HEAD_BYTE1  0x95    // Decimal 163
+#define HEAD_BYTE2  0x27    // Decimal 149
 
 // structure used to define logging format
 struct LogStructure {
     uint8_t msg_type;
     uint8_t msg_len;
     const char name[5];
-    const char format[16];
-    const char labels[64];
+    const char format[20];
+    const char labels[80];
 };
 
 /*
@@ -67,6 +67,9 @@ struct PACKED log_GPA {
     uint16_t sacc;
     uint8_t  have_vv;
     uint32_t sample_ms;
+    uint8_t  hdgs;
+    float    hdg;
+    uint16_t hdgacc;
 };
 
 struct PACKED log_Message {
@@ -532,6 +535,8 @@ struct PACKED log_Current {
     LOG_PACKET_HEADER;
     uint64_t time_us;
     float    voltage;
+    float    copter_voltage;
+    float    steer_voltage;
     float    voltage_resting;
     float    current_amps;
     float    current_total;
@@ -887,8 +892,10 @@ struct PACKED log_Proximity {
 #define ESC_LABELS "TimeUS,RPM,Volt,Curr,Temp"
 #define ESC_FMT   "Qcccc"
 
-#define GPA_LABELS "TimeUS,VDop,HAcc,VAcc,SAcc,VV,SMS"
-#define GPA_FMT   "QCCCCBI"
+
+
+#define GPA_LABELS "TimeUS,VDop,HAcc,VAcc,SAcc,VV,SMS,HDGS,HDG,HDGAcc"
+#define GPA_FMT   "QCCCCBIBfC"
 
 // see "struct GPS_State" and "Log_Write_GPS":
 #define GPS_LABELS "TimeUS,Status,GMS,GWk,NSats,HDop,Lat,Lng,Alt,Spd,GCrs,VZ,U"
@@ -912,8 +919,8 @@ struct PACKED log_Proximity {
 #define QUAT_LABELS "TimeUS,Q1,Q2,Q3,Q4"
 #define QUAT_FMT    "Qffff"
 
-#define CURR_LABELS "TimeUS,Volt,VoltR,Curr,CurrTot,Temp,Res"
-#define CURR_FMT    "Qffffcf"
+#define CURR_LABELS "TimeUS,Volt,CVolt,SVolt,VoltR,Curr,CurrTot,Temp,Res"
+#define CURR_FMT    "Qffffffcf"
 
 #define CURR_CELL_LABELS "TimeUS,Volt,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10"
 #define CURR_CELL_FMT    "QfHHHHHHHHHH"

@@ -44,6 +44,12 @@ public:
         AP_Int8  autotune_level;
         AP_Int8  stall_prevention;
         AP_Int16 loiter_radius;
+        AP_Float track_heading_ki;
+        AP_Float track_heading_kp;
+        AP_Float track_time_gain;
+        AP_Float track_cirle_gain;
+        AP_Float track_Acceptable_angle;
+        AP_Float track_radius_gain;
 
         struct Rangefinder_State {
             bool in_range:1;

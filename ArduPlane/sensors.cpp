@@ -122,10 +122,18 @@ void Plane::read_battery(void)
     battery.read();
     compass.set_current(battery.current_amps());
 
+    //Primary low electricity
     if (hal.util->get_soft_armed() &&
         battery.exhausted(g.fs_batt_voltage, g.fs_batt_mah)) {
         low_battery_event();
     }
+
+    //secondly low electricity
+    if (hal.util->get_soft_armed() &&
+        battery.exhausted2(g.fs_batt_voltage2, g.fs_batt_mah2)) {
+        low_battery_event2();
+    }
+    
     if (battery.get_type() != AP_BattMonitor::BattMonitor_TYPE_NONE) {
         AP_Notify::flags.battery_voltage = battery.voltage();
     }
@@ -267,6 +275,7 @@ void Plane::update_sensor_status_flags(void)
     case AVOID_ADSB:
     case GUIDED:
     case CIRCLE:
+    case NO_GPS_RTL:
     case QRTL:
         control_sensors_enabled |= MAV_SYS_STATUS_SENSOR_ANGULAR_RATE_CONTROL; // 3D angular rate control
         control_sensors_enabled |= MAV_SYS_STATUS_SENSOR_ATTITUDE_STABILIZATION; // attitude stabilisation

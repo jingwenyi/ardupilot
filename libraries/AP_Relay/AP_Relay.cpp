@@ -18,6 +18,9 @@
 #elif defined(CONFIG_ARCH_BOARD_PX4FMU_V4)
 #define RELAY1_PIN_DEFAULT -1
 #define RELAY2_PIN_DEFAULT -1
+#elif defined(CONFIG_ARCH_BOARD_UAVRS_V1)
+#define RELAY1_PIN_DEFAULT 117
+#define RELAY2_PIN_DEFAULT -1
 #else
 #define RELAY1_PIN_DEFAULT 54
 #define RELAY2_PIN_DEFAULT 55
@@ -65,7 +68,7 @@ const AP_Param::GroupInfo AP_Relay::var_info[] = {
     // @Description: The state of the relay on boot. 
     // @User: Standard
     // @Values: 0:Off,1:On,2:NoChange
-    AP_GROUPINFO("DEFAULT",  4, AP_Relay, _default, 0),
+    AP_GROUPINFO("DEFAULT",  4, AP_Relay, _default, 1),
 
     AP_GROUPEND
 };

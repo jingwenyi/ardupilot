@@ -639,17 +639,57 @@ bool Plane::verify_nav_wp(const AP_Mission::Mission_Command& cmd)
     }
     
     if (auto_state.wp_distance <= acceptance_distance_m) {
+        //set waypoint complete flag
+        AP_Mission::Mission_Command temp;
+        mission.read_cmd_from_storage(mission.get_current_nav_cmd().index, temp);
+        if(temp.type == MAV_POINT_NORMAL_BEFOREHAND_WAYPOINT || temp.type == MAV_POINT_NORMAL_TAKEPHOTO_WAYPOINT){
+            temp.complete = TRUE;
+            if (!mission.replace_cmd(mission.get_current_nav_cmd().index, temp)){
+                gcs().send_text(MAV_SEVERITY_INFO, "set waypoint complete flag error\r\n");
+            }
+        }
         gcs().send_text(MAV_SEVERITY_INFO, "Reached waypoint #%i dist %um",
                           (unsigned)mission.get_current_nav_cmd().index,
                           (unsigned)get_distance(current_loc, flex_next_WP_loc));
+
+        if(temp.type == MAV_POINT_RTL_FIFTH){
+            float alt = 0.0f;
+            ahrs.get_relative_position_D_home(alt);
+            gcs().send_text(MAV_SEVERITY_CRITICAL, "current alt:%4.2lfm, waypoint alt:%dm",(double)-alt, temp.content.location.alt/100);
+            if(-alt - temp.content.location.alt/100 > g.fifth_rtl_limit_hight){
+                uint16_t seq = mission.num_commands() - 6;
+                mission.set_current_cmd(seq);
+                return false;
+            }
+        }
         return true;
 	}
 
     // have we flown past the waypoint?
     if (location_passed_point(current_loc, prev_WP_loc, flex_next_WP_loc)) {
+        //set waypoint complete flag
+        AP_Mission::Mission_Command temp;
+        mission.read_cmd_from_storage(mission.get_current_nav_cmd().index, temp);
+        if(temp.type == MAV_POINT_NORMAL_BEFOREHAND_WAYPOINT || temp.type == MAV_POINT_NORMAL_TAKEPHOTO_WAYPOINT){
+            temp.complete = TRUE;
+            if (!mission.replace_cmd(mission.get_current_nav_cmd().index, temp)){
+                gcs().send_text(MAV_SEVERITY_INFO, "set waypoint complete flag error\r\n");
+            }
+        }
         gcs().send_text(MAV_SEVERITY_INFO, "Passed waypoint #%i dist %um",
                           (unsigned)mission.get_current_nav_cmd().index,
                           (unsigned)get_distance(current_loc, flex_next_WP_loc));
+
+        if(temp.type == MAV_POINT_RTL_FIFTH){
+            float alt = 0.0f;
+            ahrs.get_relative_position_D_home(alt);
+            gcs().send_text(MAV_SEVERITY_CRITICAL, "current alt:%4.2lfm, waypoint alt:%dm",(double)-alt, temp.content.location.alt/100);
+            if(-alt - temp.content.location.alt/100 > g.fifth_rtl_limit_hight){
+                uint16_t seq = mission.num_commands() - 6;
+                mission.set_current_cmd(seq);
+                return false;
+            }
+        }
         return true;
     }
 

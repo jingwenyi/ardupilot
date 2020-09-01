@@ -964,7 +964,9 @@ void AP_TECS::update_pitch_throttle(int32_t hgt_dem_cm,
     _update_speed(load_factor);
 
     if (aparm.takeoff_throttle_max != 0 &&
-            (_flight_stage == AP_Vehicle::FixedWing::FLIGHT_TAKEOFF || _flight_stage == AP_Vehicle::FixedWing::FLIGHT_ABORT_LAND)) {
+            (_flight_stage == AP_Vehicle::FixedWing::FLIGHT_TAKEOFF ||
+                _flight_stage == AP_Vehicle::FixedWing::FLIGHT_ABORT_LAND ||
+                _flight_stage == AP_Vehicle::FixedWing::FLIGHT_VTOL)) {
         _THRmaxf  = aparm.takeoff_throttle_max * 0.01f;
     } else {
         _THRmaxf  = aparm.throttle_max * 0.01f;

@@ -19,8 +19,10 @@
 #include <uavcan/equipment/gnss/Fix.hpp>
 #include <uavcan/equipment/gnss/Auxiliary.hpp>
 #include <uavcan/equipment/ahrs/MagneticFieldStrength.hpp>
+#include <uavcan/equipment/ahrs/MagneticFieldStrength2.hpp>
 #include <uavcan/equipment/air_data/StaticPressure.hpp>
 #include <uavcan/equipment/air_data/StaticTemperature.hpp>
+#include <uavcan/equipment/air_data/AirSpeed.hpp>
 #include <uavcan/equipment/actuator/ArrayCommand.hpp>
 #include <uavcan/equipment/actuator/Command.hpp>
 #include <uavcan/equipment/actuator/Status.hpp>
@@ -225,6 +227,39 @@ static void magnetic_cb1(const uavcan::ReceivedDataStructure<uavcan::equipment::
 {   magnetic_cb(msg, 1); }
 static void (*magnetic_cb_arr[2])(const uavcan::ReceivedDataStructure<uavcan::equipment::ahrs::MagneticFieldStrength>& msg)
         = { magnetic_cb0, magnetic_cb1 };
+        
+static void magnetic_cb_2(const uavcan::ReceivedDataStructure<uavcan::equipment::ahrs::MagneticFieldStrength2>& msg, uint8_t mgr)
+{
+    if (hal.can_mgr[mgr] != nullptr) {
+        AP_UAVCAN *ap_uavcan = hal.can_mgr[mgr]->get_UAVCAN();
+        if (ap_uavcan != nullptr) {
+			#if 0
+			printf("magnetic call back! getSrcNodeID[%d], magnetic_field_ga x[%d] y[%d] z[%d]\n", 
+						msg.getSrcNodeID().get(), 
+						msg.magnetic_field_ga_x, 
+						msg.magnetic_field_ga_y, 
+						msg.magnetic_field_ga_z);
+			#endif
+			AP_UAVCAN::Mag_Info *state = ap_uavcan->find_mag_node(msg.getSrcNodeID().get());
+            if (state != nullptr) {
+                state->mag_vector.x = msg.magnetic_field_ga_x;
+                state->mag_vector.y = msg.magnetic_field_ga_y;
+                state->mag_vector.z = msg.magnetic_field_ga_z;
+
+				//printf("magnetic call back! state->mag_vector x[%.1f] y[%.1f] z[%.1f]\n", state->mag_vector.x, state->mag_vector.y, state->mag_vector.z);
+                // after all is filled, update all listeners with new data
+                ap_uavcan->update_mag_state(msg.getSrcNodeID().get());
+            }
+        }
+    }
+}
+
+static void magnetic_cb_2_0(const uavcan::ReceivedDataStructure<uavcan::equipment::ahrs::MagneticFieldStrength2>& msg)
+{   magnetic_cb_2(msg, 0); }
+static void magnetic_cb_2_1(const uavcan::ReceivedDataStructure<uavcan::equipment::ahrs::MagneticFieldStrength2>& msg)
+{   magnetic_cb_2(msg, 1); }
+static void (*magnetic_cb_2_arr[2])(const uavcan::ReceivedDataStructure<uavcan::equipment::ahrs::MagneticFieldStrength2>& msg)
+        = { magnetic_cb_2_0, magnetic_cb_2_1 };
 
 static void air_data_sp_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::air_data::StaticPressure>& msg, uint8_t mgr)
 {
@@ -274,6 +309,35 @@ static void air_data_st_cb1(const uavcan::ReceivedDataStructure<uavcan::equipmen
 static void (*air_data_st_cb_arr[2])(const uavcan::ReceivedDataStructure<uavcan::equipment::air_data::StaticTemperature>& msg)
         = { air_data_st_cb0, air_data_st_cb1 };
 
+static void air_data_as_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::air_data::AirSpeed>& msg, uint8_t mgr)
+{
+    if (hal.can_mgr[mgr] != nullptr) {
+        AP_UAVCAN *ap_uavcan = hal.can_mgr[mgr]->get_UAVCAN();
+        if (ap_uavcan != nullptr) {
+            AP_UAVCAN::AirSpeed_Info *state = ap_uavcan->find_airspeed_node(0/*msg.getSrcNodeID().get()*/);
+
+            if (state != nullptr) {
+                state->pressure = msg.pressure;
+                state->temperature = msg.temperature;
+				state->pressure2 = msg.pressure2;
+                state->temperature2 = msg.temperature2;
+				//printf("airspeed call back! state->pressure[%d], state->temperature[%d], state->pressure2[%d], state->temperature2[%d]\n", state->pressure, state->temperature, state->pressure2, state->temperature2);
+
+				// after all is filled, update all listeners with new data
+                ap_uavcan->update_airspeed_state(0/*msg.getSrcNodeID().get()*/);
+            }
+        }
+    }
+}
+
+static void air_data_as_cb0(const uavcan::ReceivedDataStructure<uavcan::equipment::air_data::AirSpeed>& msg)
+{   air_data_as_cb(msg, 0); }
+static void air_data_as_cb1(const uavcan::ReceivedDataStructure<uavcan::equipment::air_data::AirSpeed>& msg)
+{   air_data_as_cb(msg, 1); }
+static void (*air_data_as_cb_arr[2])(const uavcan::ReceivedDataStructure<uavcan::equipment::air_data::AirSpeed>& msg)
+        = { air_data_as_cb0, air_data_as_cb1 };
+
+
 // publisher interfaces
 static uavcan::Publisher<uavcan::equipment::actuator::ArrayCommand>* act_out_array[MAX_NUMBER_OF_CAN_DRIVERS];
 static uavcan::Publisher<uavcan::equipment::esc::RawCommand>* esc_raw[MAX_NUMBER_OF_CAN_DRIVERS];
@@ -302,6 +366,11 @@ AP_UAVCAN::AP_UAVCAN() :
         _mag_nodes[i] = UINT8_MAX;
         _mag_node_taken[i] = 0;
     }
+    
+	for (uint8_t i = 0; i < AP_UAVCAN_MAX_AIRSPEED_NODES; i++) {
+        _airspeed_nodes[i] = UINT8_MAX;
+        _airspeed_node_taken[i] = 0;
+    }
 
     for (uint8_t i = 0; i < AP_UAVCAN_MAX_LISTENERS; i++) {
         _gps_listener_to_node[i] = UINT8_MAX;
@@ -312,6 +381,9 @@ AP_UAVCAN::AP_UAVCAN() :
 
         _mag_listener_to_node[i] = UINT8_MAX;
         _mag_listeners[i] = nullptr;
+		
+		_airspeed_listener_to_node[i] = UINT8_MAX;
+        _airspeed_listeners[i] = nullptr;
     }
 
     _rc_out_sem = hal.util->new_semaphore();
@@ -393,6 +465,14 @@ bool AP_UAVCAN::try_init(void)
                         debug_uavcan(1, "UAVCAN Compass subscriber start problem\n\r");
                         return false;
                     }
+                    
+                    uavcan::Subscriber<uavcan::equipment::ahrs::MagneticFieldStrength2> *magnetic2;
+                    magnetic2 = new uavcan::Subscriber<uavcan::equipment::ahrs::MagneticFieldStrength2>(*node);
+                    const int magnetic_start_res_2 = magnetic2->start(magnetic_cb_2_arr[_uavcan_i]);
+                    if (magnetic_start_res_2 < 0) {
+                        debug_uavcan(1, "UAVCAN Compass for multiple mags subscriber start problem\n\r");
+                        return false;
+                    }
 
                     uavcan::Subscriber<uavcan::equipment::air_data::StaticPressure> *air_data_sp;
                     air_data_sp = new uavcan::Subscriber<uavcan::equipment::air_data::StaticPressure>(*node);
@@ -407,6 +487,14 @@ bool AP_UAVCAN::try_init(void)
                     const int air_data_st_start_res = air_data_st->start(air_data_st_cb_arr[_uavcan_i]);
                     if (air_data_st_start_res < 0) {
                         debug_uavcan(1, "UAVCAN Temperature subscriber start problem\n\r");
+                        return false;
+                    }
+
+                    uavcan::Subscriber<uavcan::equipment::air_data::AirSpeed> *air_data_as;
+                    air_data_as = new uavcan::Subscriber<uavcan::equipment::air_data::AirSpeed>(*node);
+					const int air_data_as_start_res = air_data_as->start(air_data_as_cb_arr[_uavcan_i]);
+                    if (air_data_as_start_res < 0) {
+                        debug_uavcan(1, "UAVCAN AirSpeed subscriber start problem\n\r");
                         return false;
                     }
 
@@ -1029,6 +1117,71 @@ void AP_UAVCAN::update_mag_state(uint8_t node)
             for (uint8_t j = 0; j < AP_UAVCAN_MAX_LISTENERS; j++) {
                 if (_mag_listener_to_node[j] == i) {
                     _mag_listeners[j]->handle_mag_msg(_mag_node_state[i].mag_vector);
+                }
+            }
+        }
+    }
+}
+
+uint8_t AP_UAVCAN::register_airspeed_listener_to_id(AP_Airspeed_Backend* new_listener, uint8_t id)
+{
+    uint8_t sel_place = UINT8_MAX, ret = 0;
+
+    for (uint8_t i = 0; i < AP_UAVCAN_MAX_LISTENERS; i++) {
+        if (_airspeed_listeners[i] == nullptr) {
+            sel_place = i;
+            break;
+        }
+    }
+
+    if (sel_place != UINT8_MAX) {
+        for (uint8_t i = 0; i < AP_UAVCAN_MAX_AIRSPEED_NODES; i++) {
+            if (_airspeed_nodes[i] == id) {
+                _airspeed_listeners[sel_place] = new_listener;
+                _airspeed_listener_to_node[sel_place] = i;
+                _airspeed_node_taken[i]++;
+                ret = i + 1;
+
+                debug_uavcan(2, "reg_AS place:%d, chan: %d\n\r", sel_place, i);
+                break;
+            }
+        }
+    }
+
+    return ret;
+}
+
+
+AP_UAVCAN::AirSpeed_Info *AP_UAVCAN::find_airspeed_node(uint8_t node)
+{
+    // Check if such node is already defined
+    for (uint8_t i = 0; i < AP_UAVCAN_MAX_AIRSPEED_NODES; i++) {
+        if (_airspeed_nodes[i] == node) {
+            return &_airspeed_node_state[i];
+        }
+    }
+
+    // If not - try to find free space for it
+    for (uint8_t i = 0; i < AP_UAVCAN_MAX_AIRSPEED_NODES; i++) {
+        if (_airspeed_nodes[i] == UINT8_MAX) {
+            _airspeed_nodes[i] = node;
+            return &_airspeed_node_state[i];
+        }
+    }
+
+    // If no space is left - return nullptr
+    return nullptr;
+}
+
+void AP_UAVCAN::update_airspeed_state(uint8_t node)
+{
+    // Go through all listeners of specified node and call their's update methods
+    for (uint8_t i = 0; i < AP_UAVCAN_MAX_AIRSPEED_NODES; i++) {
+		//printf("_airspeed_nodes[%d] is %d, node[%d]\n", i, _airspeed_nodes[i], node);
+        if (_airspeed_nodes[i] == node) {
+            for (uint8_t j = 0; j < AP_UAVCAN_MAX_LISTENERS; j++) {
+                if (_airspeed_listener_to_node[j] == i) {
+                    _airspeed_listeners[j]->handle_as_msg(_airspeed_node_state[i].pressure, _airspeed_node_state[i].temperature, _airspeed_node_state[i].pressure2, _airspeed_node_state[i].temperature2);
                 }
             }
         }

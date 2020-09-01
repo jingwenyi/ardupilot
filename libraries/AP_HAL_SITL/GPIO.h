@@ -22,6 +22,12 @@ public:
     /* return true if USB cable is connected */
     bool usb_connected(void);
 
+    /* return true if imu data ready */
+	virtual bool imu_data_ready(void){};
+
+	/* reset imu by hardware io */
+	virtual void imu_reset(bool level){};
+
 private:
     SITL_State *_sitlState;
 };

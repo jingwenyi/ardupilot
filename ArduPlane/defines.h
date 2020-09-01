@@ -64,7 +64,32 @@ enum FlightMode {
     QHOVER        = 18,
     QLOITER       = 19,
     QLAND         = 20,
-    QRTL          = 21
+    QRTL          = 21,
+    NO_GPS_RTL    = 22
+};
+
+enum PLANE_EVENT_REPORT_TO_GCS{
+    PLANE_EVENT_REPORT_ARM = 0,                 // arm event 
+    PLANE_EVENT_REPORT_ARM_REFUSE = 1,          // arm event refuse
+    PLANE_EVENT_REPORT_TAKEOFF = 2,             //takeoff event 
+    PLANE_EVENT_REPORT_TAKEOFF_REFUSE = 3,      //takeoff event refuse
+    PLANE_EVENT_REPORT_DISARM = 4,              //disarm event
+    PLANE_EVENT_REPORT_DISARM_REFUSE = 5,       //disarm event refuse
+    PLANE_EVENT_REPORT_LAND = 6,                //land event
+    PLANE_EVENT_REPORT_LAND_REFUSE = 7,         //land event refuse
+    PLANE_EVENT_REPORT_RETURN = 8,              //return event
+    PLANE_EVENT_REPORT_RETURN_REFUSE = 9,       //return event refuse
+    PLANE_EVENT_REPORT_LOW_BATT_ONE = 10,       //one-level Low battery to return
+    PLANE_EVENT_REPORT_LOW_BATT_TWO = 11,       //two-level low battery to land
+    PLANE_EVENT_REPORT_LOSE_HEIGHT = 12,        //lose height to land
+    PLANE_EVENT_REPORT_AIRSPEED_BAD = 13,       //airspeed bad to return
+    PLANE_EVENT_REPORT_NAVIGATION_BAD = 14,     //navigation bad to return
+    PLANE_EVENT_REPORT_SDCARD_BAD = 15,         //sdcard bad to return
+    PLANE_EVENT_REPORT_RC_GCS_LOSE  = 16,       //rc or gcs lose to return
+    PLANE_EVENT_REPORT_EMERGENCY_ASS = 17,      //emergency event open assisted
+    PLANE_EVENT_REPORT_EMERGENCY_QLAND = 18,    //emergency event qland
+    PLANE_EVENT_REPORT_DISTANCE_PROTECTION = 19, //distance protection
+    PLANE_EVENT_REPORT_LOST_GPS  = 20            //lost gps
 };
 
 enum mode_reason_t {
@@ -83,7 +108,9 @@ enum mode_reason_t {
     MODE_REASON_SOARING_FBW_B_WITH_MOTOR_RUNNING,
     MODE_REASON_SOARING_THERMAL_DETECTED,
     MODE_REASON_SOARING_IN_THERMAL,
-    MODE_REASON_SOARING_THERMAL_ESTIMATE_DETERIORATED
+    MODE_REASON_SOARING_THERMAL_ESTIMATE_DETERIORATED,
+    MODE_REASON_EMERGENCY_EVENTS,
+    MODE_REASON_DISTANCE_TO_FAR
 };
 
 // type of stick mixing enabled
@@ -165,6 +192,7 @@ enum log_messages {
 #define MASK_LOG_RC                     (1<<13)
 #define MASK_LOG_SONAR                  (1<<14)
 #define MASK_LOG_ARM_DISARM             (1<<15)
+#define MASK_LOG_QTUN_CTRL_RATE     (1<<0)
 #define MASK_LOG_IMU_RAW                (1UL<<19)
 
 // Waypoint Modes

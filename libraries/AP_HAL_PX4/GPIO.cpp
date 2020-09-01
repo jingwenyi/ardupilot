@@ -29,7 +29,7 @@ PX4GPIO::PX4GPIO()
 
 void PX4GPIO::init()
 {
-#if defined(CONFIG_ARCH_BOARD_PX4FMU_V1) || defined(CONFIG_ARCH_BOARD_PX4FMU_V4)
+#if defined(CONFIG_ARCH_BOARD_PX4FMU_V1) || defined(CONFIG_ARCH_BOARD_PX4FMU_V4) || defined(CONFIG_ARCH_BOARD_UAVRS_V1)
     _led_fd = open(LED0_DEVICE_PATH, O_RDWR);
     if (_led_fd == -1) {
         AP_HAL::panic("Unable to open " LED0_DEVICE_PATH);
@@ -46,6 +46,7 @@ void PX4GPIO::init()
     }
 #endif
 #endif
+#if 0
 #if !defined(CONFIG_ARCH_BOARD_AEROFC_V1)
     _tone_alarm_fd = open(TONEALARM0_DEVICE_PATH, O_WRONLY);
     if (_tone_alarm_fd == -1) {
@@ -53,6 +54,18 @@ void PX4GPIO::init()
     }
 
     _gpio_fmu_fd = open(PX4FMU_DEVICE_PATH, 0);
+    if (_gpio_fmu_fd == -1) {
+        AP_HAL::panic("Unable to open GPIO");
+    }
+#endif
+#else
+	#if !defined(CONFIG_ARCH_BOARD_UAVRS_V1)
+    //_tone_alarm_fd = open(TONEALARM0_DEVICE_PATH, O_WRONLY);
+    //if (_tone_alarm_fd == -1) {
+    //    AP_HAL::panic("Unable to open " TONEALARM0_DEVICE_PATH);
+    //}
+	#endif
+	_gpio_fmu_fd = open(PX4FMU_DEVICE_PATH, 0);
     if (_gpio_fmu_fd == -1) {
         AP_HAL::panic("Unable to open GPIO");
     }
@@ -74,11 +87,14 @@ void PX4GPIO::init()
 
 void PX4GPIO::pinMode(uint8_t pin, uint8_t output)
 {
+	uint32_t pinmask;
+	uint8_t old_value;
+	
     switch (pin) {
     case PX4_GPIO_FMU_SERVO_PIN(0) ... PX4_GPIO_FMU_SERVO_PIN(5):
-        uint32_t pinmask = 1U<<(pin-PX4_GPIO_FMU_SERVO_PIN(0));
+        pinmask = 1U<<(pin-PX4_GPIO_FMU_SERVO_PIN(0));
         if (output) {
-            uint8_t old_value = read(pin);
+            old_value = read(pin);
             if (old_value) {
                 ioctl(_gpio_fmu_fd, GPIO_SET_OUTPUT_HIGH, pinmask);
             } else {
@@ -88,16 +104,37 @@ void PX4GPIO::pinMode(uint8_t pin, uint8_t output)
             ioctl(_gpio_fmu_fd, GPIO_SET_INPUT, pinmask);
         }
         break;
+	
+#ifdef GPIO_CAMERA_TRIGGER
+	case PX4_GPIO_CAMER_TRRIGER_RELAY_PIN:
+        pinmask = GPIO_CAMERA_TRIGGER;
+        if (output) {
+            old_value = read(pin);
+            if (old_value) {
+                ioctl(_gpio_fmu_fd, GPIO_SET_OUTPUT_HIGH, pinmask);
+            } else {
+                ioctl(_gpio_fmu_fd, GPIO_SET_OUTPUT_LOW, pinmask);
+            }
+        } else {
+            ioctl(_gpio_fmu_fd, GPIO_SET_INPUT, pinmask);
+        }
+        break;
+#endif		
     }
 }
 
 int8_t PX4GPIO::analogPinToDigitalPin(uint8_t pin)
 {
     switch (pin) {
-    case PX4_GPIO_FMU_SERVO_PIN(0) ... PX4_GPIO_FMU_SERVO_PIN(5):
-        // the only pins that can be mapped are the FMU servo rail pins */
-        return pin;
+	    case PX4_GPIO_FMU_SERVO_PIN(0) ... PX4_GPIO_FMU_SERVO_PIN(5):
+	        // the only pins that can be mapped are the FMU servo rail pins */
+	        return pin;
+#ifdef GPIO_CAMERA_FEEDBACK
+		case PX4_GPIO_CAMER_FEEDBACK_INPUT_PIN:
+			return pin;
+#endif
     }
+
     return -1;
 }
 
@@ -170,6 +207,22 @@ uint8_t PX4GPIO::read(uint8_t pin) {
             ioctl(_gpio_fmu_fd, GPIO_GET, (unsigned long)&relays);
             return (relays & (1U<<(pin-PX4_GPIO_FMU_SERVO_PIN(0))))?HIGH:LOW;
         }
+	
+#ifdef GPIO_CAMERA_TRIGGER
+	case PX4_GPIO_CAMER_TRRIGER_RELAY_PIN: {
+			uint32_t relays = 0;
+			ioctl(_gpio_fmu_fd, GPIO_GET, (unsigned long)&relays);
+			return (relays & GPIO_CAMERA_TRIGGER)?HIGH:LOW;
+		}
+#endif
+
+#ifdef GPIO_CAMERA_FEEDBACK
+	case PX4_GPIO_CAMER_FEEDBACK_INPUT_PIN: {
+			uint32_t relays = 0;
+			ioctl(_gpio_fmu_fd, GPIO_GET, (unsigned long)&relays);
+			return (relays & GPIO_CAMERA_FEEDBACK)?HIGH:LOW;
+		}
+#endif
     }
     return LOW;
 }
@@ -257,9 +310,21 @@ void PX4GPIO::write(uint8_t pin, uint8_t value)
             break;
 #endif
 
-    case PX4_GPIO_FMU_SERVO_PIN(0) ... PX4_GPIO_FMU_SERVO_PIN(5):
-        ioctl(_gpio_fmu_fd, value==LOW?GPIO_CLEAR:GPIO_SET, 1U<<(pin-PX4_GPIO_FMU_SERVO_PIN(0)));
-        break;
+	    case PX4_GPIO_FMU_SERVO_PIN(0) ... PX4_GPIO_FMU_SERVO_PIN(5):
+	        ioctl(_gpio_fmu_fd, value==LOW?GPIO_CLEAR:GPIO_SET, 1U<<(pin-PX4_GPIO_FMU_SERVO_PIN(0)));
+	        break;
+
+#ifdef GPIO_CAMERA_TRIGGER
+		case PX4_GPIO_CAMER_TRRIGER_RELAY_PIN:
+	        ioctl(_gpio_fmu_fd, value==LOW?GPIO_CLEAR:GPIO_SET, GPIO_CAMERA_TRIGGER);
+			break;
+#endif
+
+#ifdef GPIO_CAMERA_FEEDBACK
+		case PX4_GPIO_CAMER_FEEDBACK_INPUT_PIN:
+			ioctl(_gpio_fmu_fd, value==LOW?GPIO_CLEAR:GPIO_SET, GPIO_CAMERA_FEEDBACK);
+			break;
+#endif
     }
 }
 
@@ -293,6 +358,27 @@ bool PX4GPIO::usb_connected(void)
     return stm32_gpioread(GPIO_OTGFS_VBUS) && _usb_connected;
 }
 
+/*
+  return true wen imu data ready
+ */
+bool PX4GPIO::imu_data_ready(void)
+{
+#ifdef CONFIG_ARCH_BOARD_UAVRS_V1
+    return stm32_gpioread(GPIO_ADIS_DRDY);
+#else
+    return false;
+#endif
+}
+
+/*
+  reset imu by hardware io
+ */
+void PX4GPIO::imu_reset(bool level)
+{
+#ifdef CONFIG_ARCH_BOARD_UAVRS_V1
+    stm32_gpiowrite(GPIO_ADIS_RESET, level);  
+#endif
+}
 
 PX4DigitalSource::PX4DigitalSource(uint8_t v) :
     _v(v)

@@ -358,6 +358,12 @@ void Plane::stabilize_acro(float speed_scaler)
  */
 void Plane::stabilize()
 {
+
+    if(servo_motor_test.running){
+        return;
+    }
+
+    
     if (control_mode == MANUAL) {
         // nothing to do
         return;
@@ -621,6 +627,7 @@ bool Plane::allow_reverse_thrust(void)
         allow |= (g.use_reverse_thrust & USE_REVERSE_THRUST_RTL);
         break;
     case CIRCLE:
+    case NO_GPS_RTL:
         allow |= (g.use_reverse_thrust & USE_REVERSE_THRUST_CIRCLE);
         break;
     case CRUISE:
@@ -717,3 +724,128 @@ void Plane::update_load_factor(void)
         roll_limit_cd = constrain_int32(roll_limit_cd, -roll_limit, roll_limit);
     }    
 }
+
+
+/*
+**  update roll for no gps rtl mode
+**
+*/
+void Plane::update_roll_no_gps_rtl(void)
+{
+    //1.Adjust the airplane's heading to the home point in a straight line
+    //2.Fly in accordance with course
+    //3.circle near home
+    static bool circle_direction = false; //true:Clockwise, false:Anti-clockwise
+    static float integral;
+    static uint32_t total_time;
+    static uint32_t track_time_ms;
+    float heading_error = heading_to_home - ahrs.yaw_sensor*0.01;
+
+    if(fabs(heading_error) > 180){
+        if(heading_error > 0){
+            heading_error -= 360;
+        }else{
+            heading_error += 360;
+        }
+    }
+
+    if(no_gps_rtl_home_flag == NO_GPS_RTL_NONE){
+        if(fabs(heading_error) <= aparm.track_Acceptable_angle){
+            no_gps_rtl_home_flag = NO_GPS_RTL_HEADING_TRACK;
+            integral = 0.0f;
+            track_time_ms = AP_HAL::millis();
+            total_time = aparm.track_time_gain * distance_to_home * 100 / aparm.airspeed_cruise_cm;
+            gcs().send_text(MAV_SEVERITY_CRITICAL,"heading track1,heading:%3.2lf, time:%d", (double)heading_error, total_time);
+        }else{
+            circle_direction = heading_error > 0 ? true : false;
+#if  1
+            /*
+                    * Establishing coordinate system to calculate S1 and  angle P2P0P1.
+                    */
+            //tan(nav_roll_cd) = a / g
+            float acc_cicyle = tanf(aparm.track_cirle_gain * roll_limit_cd * 0.01 * M_PI / 180) * GRAVITY_MSS;
+            //Ar = V*V /R
+            float R_cicyle = aparm.track_radius_gain * sq(aparm.airspeed_cruise_cm * 0.01) / acc_cicyle;
+            gcs().send_text(MAV_SEVERITY_CRITICAL,"R_cicyle:%3.2lf, heading_error:%3.2lf", (double)R_cicyle, (double)heading_error);
+
+            Vector2f P1(0,0);
+            Vector2f P0, P2;
+            Vector2f O(R_cicyle, 0);
+
+            if(fabs(heading_error) <= 90){
+                P0.x = distance_to_home * cosf(fabs(heading_error)* M_PI / 180);
+                P0.y = distance_to_home * sinf(fabs(heading_error) * M_PI / 180);
+            }else{
+                P0.x = distance_to_home * sinf((180 - fabs(heading_error)) * M_PI / 180);
+                P0.y = -distance_to_home * cosf((180 - fabs(heading_error)) * M_PI / 180);
+            }
+
+            Vector2f V_OP(P0.x - O.x, P0.y - O.y);
+            float OP = V_OP.length();
+            if(OP > R_cicyle){
+                float S0 = distance_to_home;
+                float S1 = sqrt(sq(OP) - sq(R_cicyle));
+                float P2P0O_angle = asinf(R_cicyle / OP) * 180 / M_PI;
+                float OP0P1_angle = acosf((sq(OP) + sq(S0) - sq(R_cicyle)) / (2 * OP * S0)) * 180 / M_PI;
+                float P2P0P1_angle = P2P0O_angle + OP0P1_angle;
+
+                gcs().send_text(MAV_SEVERITY_CRITICAL,"P2P0P1:%3.2lf;P2P0O:%3.2lf, OP0P1:%3.2lf",
+                                                                (double)P2P0P1_angle, (double)P2P0O_angle, (double)OP0P1_angle);
+
+                distance_to_home = S1;
+                heading_to_home = circle_direction ? heading_to_home + P2P0P1_angle : heading_to_home - P2P0P1_angle;
+                if(heading_to_home > 360){
+                    heading_to_home -= 360;
+                }else if(heading_to_home < 0){
+                    heading_to_home += 360;
+                }
+                gcs().send_text(MAV_SEVERITY_CRITICAL,"s1:%3.2lf, heading_to_home:%3.2lf", (double)distance_to_home, (double)heading_to_home);
+            }
+#endif
+            no_gps_rtl_home_flag = NO_GPS_RTL_HEADING_ONLIN;
+
+            gcs().send_text(MAV_SEVERITY_CRITICAL,"heading online,heading:%3.2lf, dirction:%d",
+                                                                (double)heading_error, circle_direction);
+        }
+    }
+
+    if(no_gps_rtl_home_flag == NO_GPS_RTL_HEADING_ONLIN){
+        if(fabs(heading_error) <= aparm.track_Acceptable_angle){
+            no_gps_rtl_home_flag = NO_GPS_RTL_HEADING_TRACK;
+            integral = 0.0f;
+            track_time_ms = AP_HAL::millis();
+            total_time = aparm.track_time_gain * distance_to_home * 100 / aparm.airspeed_cruise_cm;
+            gcs().send_text(MAV_SEVERITY_CRITICAL,"heading trac2,heading:%3.2lf, time:%d", (double)heading_error, total_time);
+        }
+    }
+
+    if(no_gps_rtl_home_flag == NO_GPS_RTL_HEADING_TRACK && AP_HAL::millis() - track_time_ms > total_time * 1000){
+        no_gps_rtl_home_flag = NO_GPS_RTL_NEAR_HOME;
+        emergency_return = true;
+        gcs().send_text(MAV_SEVERITY_CRITICAL, "near home");
+    }
+
+    switch(no_gps_rtl_home_flag){
+    case NO_GPS_RTL_NONE:
+        //nothing
+        break;
+    case NO_GPS_RTL_HEADING_ONLIN:
+        if(circle_direction){
+            nav_roll_cd  = aparm.track_cirle_gain * roll_limit_cd;
+        }else{
+            nav_roll_cd  = -aparm.track_cirle_gain * roll_limit_cd;
+        }
+        break;
+    case NO_GPS_RTL_HEADING_TRACK:
+        integral += aparm.track_heading_ki * heading_error;
+        if(fabs(heading_error) < 10){
+           integral = 0;
+        }
+        nav_roll_cd = (aparm.track_heading_kp * heading_error + integral) * 100;
+        break;
+    case NO_GPS_RTL_NEAR_HOME:
+        nav_roll_cd  = aparm.track_cirle_gain * roll_limit_cd;
+        break;
+    }
+}
+

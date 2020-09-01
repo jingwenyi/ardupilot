@@ -72,9 +72,10 @@ const AP_Scheduler::Task Plane::scheduler_tasks[] = {
     SCHED_TASK(update_trigger,         50,    100),
     SCHED_TASK(log_perf_info,         0.2,    100),
     SCHED_TASK(compass_save,          0.1,    200),
-    SCHED_TASK(Log_Write_Fast,         25,    300),
-    SCHED_TASK(update_logging1,        25,    300),
-    SCHED_TASK(update_logging2,        25,    300),
+	SCHED_TASK(raw_data_update,		  100,	  200),
+    SCHED_TASK(Log_Write_Fast,         5,    300),
+    SCHED_TASK(update_logging1,        5,    300),
+    SCHED_TASK(update_logging2,        5,    300),
     SCHED_TASK(update_soaring,         50,    400),
     SCHED_TASK(parachute_check,        10,    200),
     SCHED_TASK(terrain_update,         10,    200),
@@ -83,7 +84,380 @@ const AP_Scheduler::Task Plane::scheduler_tasks[] = {
     SCHED_TASK(avoidance_adsb_update,  10,    100),
     SCHED_TASK(button_update,           5,    100),
     SCHED_TASK(stats_update,            1,    100),
+	SCHED_TASK(emergency_events,        10,   200),
 };
+
+
+void Plane::get_p900_id()
+{
+    uint16_t nbytes;
+    static uint8_t get_p900_status = 0;
+
+    if(!gcs_get_p900_id_flag){
+        return;
+    }
+
+    if(p900_write_mutex || p900_set_mode_mutex){
+        return;
+    }
+
+    if(!p900_read_mutex){
+        p900_read_mutex = true;
+        return;
+    }
+
+    if(get_p900_status == 0){
+        get_p900_status = 1;
+        //enter command mode
+        hal.uartC->write("+++");
+        return;
+    }
+
+    if(get_p900_status == 1){
+        get_p900_status = 2;
+        hal.uartC->write("ATE0\r");
+        return;
+    }
+
+    if(get_p900_status == 2){
+        get_p900_status = 3;
+        //clear uart
+        nbytes = hal.uartC->available();
+        for(uint16_t i=0; i<nbytes; i++){
+            uint8_t c = hal.uartC->read();
+            printf("%c", c);
+        }
+        //get id
+        hal.uartC->write("ATS104?\r");
+        return;
+    }
+
+    
+    memset(return_p900_id, 0, sizeof(return_p900_id));
+    nbytes = hal.uartC->available();
+
+    printf("----nbytes:%d\r\n", nbytes);
+
+    uint8_t j = 0;
+    bool start_flag = false;
+    for(uint16_t i=0; i<nbytes; i++){
+        uint8_t c = hal.uartC->read();
+        if(c >= '0' && c <= '9')
+        {
+            start_flag = true;
+            return_p900_id[j++] = c;
+            continue;
+        }else{
+            if(start_flag){
+                break;
+            }
+        }
+     }
+
+     printf("------id:%s\r\n",return_p900_id);
+
+     gcs().send_message(MSG_P900_ID);
+
+    if(get_p900_status == 3){
+        get_p900_status = 0;
+        hal.uartC->write("ATA\r");
+    }
+    gcs_get_p900_id_flag = false;
+    p900_read_mutex = false;
+}
+
+
+void Plane::set_p900_id()
+{
+    static uint8_t set_p900_status = 0;
+
+    if(!gcs_set_p900_id_flag){
+        return;
+    }
+
+    if(p900_read_mutex || p900_set_mode_mutex){
+        return;
+    }
+
+    if(!p900_write_mutex){
+        p900_write_mutex = true;
+    }
+
+    if(set_p900_status == 0){
+        set_p900_status = 1;
+        //enter command mode
+        hal.uartC->write("+++");
+        return;
+    }
+
+    if(set_p900_status == 1){
+        set_p900_status = 2;
+        char tmp[30] = {0};
+        sprintf(tmp, "ATS104=%s\r", p900_id);
+        hal.uartC->write(tmp);
+        return;
+    }
+
+    if(set_p900_status == 2){
+        set_p900_status = 3;
+        hal.uartC->write("AT&W\r");
+        return;
+    }
+
+    if(set_p900_status == 3){
+        set_p900_status = 0;
+        hal.uartC->write("ATA\r");
+    }
+
+    gcs_set_p900_id_flag = false;
+    p900_write_mutex = false;
+}
+
+
+void Plane::set_p900_mode()
+{
+    static uint8_t set_p900_mode_status = 0;
+
+    if(!gcs_set_p900_mode_flag){
+        return;
+    }
+
+    if(p900_read_mutex || p900_write_mutex){
+        return;
+    }
+
+    if(!p900_set_mode_mutex){
+        p900_set_mode_mutex = true;
+    }
+
+    if(set_p900_mode_status == 0){
+        set_p900_mode_status = 1;
+        //enter command mode
+        hal.uartC->write("+++");
+        return;
+    }
+
+    if(p900_mode == P900_P2P){
+        if(set_p900_mode_status == 1){
+            set_p900_mode_status = 2;
+            //set p2p mode
+            hal.uartC->write("AT&F11\r");
+            return;
+        }
+
+        if(set_p900_mode_status == 2){
+            set_p900_mode_status = 3;
+            //set p900 baud rate 115200
+            hal.uartC->write("ATS102=1\r");
+            return;
+        }
+
+        if(set_p900_mode_status == 3){
+            set_p900_mode_status = 4;
+            //set air baud rate 172800
+            hal.uartC->write("ATS103=0\r");
+            return;
+        }
+
+        if(set_p900_mode_status == 4){
+            set_p900_mode_status = 5;
+            hal.uartC->write("AT&W\r");
+            return;
+        }
+
+        if(set_p900_mode_status == 5){
+            set_p900_mode_status = 0;
+            hal.uartC->write("ATA\r");
+        }
+    }else if(p900_mode == P900_MESH){
+        if(set_p900_mode_status == 1){
+            set_p900_mode_status = 2;
+            //set p2p mode
+            hal.uartC->write("AT&F2\r");
+            return;
+        }
+
+        if(set_p900_mode_status == 2){
+            set_p900_mode_status = 3;
+            //set p900 baud rate 230400
+            hal.uartC->write("ATS102=0\r");
+            return;
+        }
+
+        if(set_p900_mode_status == 3){
+            set_p900_mode_status = 4;
+            //set air baud rate 230400
+            hal.uartC->write("ATS103=1\r");
+            return;
+        }
+
+        if(set_p900_mode_status == 4){
+            set_p900_mode_status = 5;
+            //set mac data
+            char tmp[40] = {0};
+            sprintf(tmp, "ATS140=%s\r", p900_mac);
+            hal.uartC->write(tmp);
+            return;
+        }
+
+        if(set_p900_mode_status == 5){
+            set_p900_mode_status = 6;
+            hal.uartC->write("AT&W\r");
+            return;
+        }
+
+        if(set_p900_mode_status == 6){
+            set_p900_mode_status = 0;
+            hal.uartC->write("ATA\r");
+        }
+    }
+
+    gcs_set_p900_mode_flag = false;
+    p900_set_mode_mutex = false;
+}
+
+
+
+void Plane::emergency_events(void)
+{
+    static uint32_t emergency_events_start_ms;
+    static uint32_t emergency_assisted_start_ms;
+    static bool emergency_land;
+    float alt = 0.0f;
+
+    if(emergency_return){
+        if((mission.get_current_nav_index() > mission.num_commands() - 6 && !emergency_land)
+            || !auto_throttle_mode 
+            || !arming.is_armed()
+            || control_mode == QLAND
+            || control_mode == QRTL){
+            emergency_return = false;
+            quadplane.set_emergency_flag(false);
+        }else{
+            ahrs.get_relative_position_D_home(alt);
+            if(-alt < g.fs_event_hight_land && emergency_assisted_start_ms == 0){
+                gcs().send_text(MAV_SEVERITY_CRITICAL,"emergencey assisted start");
+
+                emergency_assisted_start_ms = AP_HAL::millis();
+                quadplane.set_emergency_flag(true);
+
+                event_report = PLANE_EVENT_REPORT_EMERGENCY_ASS;
+                gcs().send_message(MSG_EVENT_REPORT);
+            }else if(emergency_assisted_start_ms > 0 && AP_HAL::millis() - emergency_assisted_start_ms > g.fs_assisted_timeout){
+                quadplane.set_emergency_flag(false);
+
+                gcs().send_text(MAV_SEVERITY_CRITICAL,"qland case:emergency event");
+                set_mode(QLAND, MODE_REASON_EMERGENCY_EVENTS);
+
+                event_report = PLANE_EVENT_REPORT_EMERGENCY_QLAND;
+                gcs().send_message(MSG_EVENT_REPORT);
+            }
+        }
+    }else{
+        emergency_assisted_start_ms = 0;
+        emergency_land = false;
+    }
+
+    //Detection of fixed wing motor stops in auto module
+    if(auto_throttle_mode && flight_stage == AP_Vehicle::FixedWing::FLIGHT_NORMAL && !emergency_return && arming.is_armed()){
+        if(control_mode == AUTO && mission.get_current_nav_index() > mission.num_commands() - 6){
+            ahrs.get_relative_position_D_home(alt);
+            //Under normal circumstances, the aircraft is not fixed under 25 meters.
+            if(-alt < 25){
+                if(mission.get_current_nav_cmd().id == MAV_CMD_NAV_WAYPOINT){
+                    
+                    if(-alt < mission.get_current_nav_cmd().content.location.alt/100){
+                        gcs().send_text(MAV_SEVERITY_CRITICAL,"-25m-current alt:%lf,waypoint alt:%d",
+                            (double)-alt, mission.get_current_nav_cmd().content.location.alt/100);
+                        emergency_return = true;
+                        emergency_land = true;
+                    }
+                }
+            }
+        }
+
+        bool emergency_events_flag = false;
+        if(control_mode == AUTO && mission.get_current_nav_cmd().type == MAV_POINT_TAKEOFF_LOITER_TO_ALT){
+             if(SpdHgt_Controller->get_height_demands() - SpdHgt_Controller->get_current_height_estimate() > 2*g.fs_event_hight_m){
+                emergency_events_flag = true;
+             }
+
+             ahrs.get_relative_position_D_home(alt);
+             if(-alt < 15){
+                gcs().send_text(MAV_SEVERITY_CRITICAL,"15m, too low current alt:%lf",(double)-alt);
+                emergency_return = true;
+                emergency_land = true;
+             }
+
+        }else{
+            if(SpdHgt_Controller->get_height_demands() - SpdHgt_Controller->get_current_height_estimate() > g.fs_event_hight_m){
+                emergency_events_flag = true;
+            }
+        }
+
+        if(emergency_events_flag == true){
+            if(emergency_events_start_ms == 0){
+                emergency_events_start_ms = AP_HAL::millis();
+            }else if(AP_HAL::millis() - emergency_events_start_ms > g.fs_event_timeout){
+                emergency_events_start_ms = 0;
+                gcs().send_text(MAV_SEVERITY_CRITICAL,"emergency events return to rtl_fisrt point");
+
+                if(control_mode == GUIDED){
+                    set_mode(AUTO, MODE_REASON_EMERGENCY_EVENTS);
+                }
+
+                if(control_mode == AUTO && mission.starts_check_misson_cmd()){
+                    //Return to emergency point
+                    if(mission.get_current_nav_index() < mission.num_commands() - 6){
+                        uint16_t seq = mission.num_commands() - 6;
+                        camera.set_trigger_distance(0);
+                        mission.set_current_cmd(seq);
+                    }
+                }else if(control_mode != NO_GPS_RTL){
+                    set_mode(RTL, MODE_REASON_EMERGENCY_EVENTS);
+                }
+                emergency_return = true;
+
+                event_report = PLANE_EVENT_REPORT_LOSE_HEIGHT;
+                gcs().send_message(MSG_EVENT_REPORT);
+            }
+        }else{
+            emergency_events_start_ms = 0;
+        }
+    }
+
+#if 1 //if getting gps, check to auto mode
+    static uint32_t last_gps_msg_ms;
+    static uint32_t get_gps_ms;
+    if(control_mode == NO_GPS_RTL && gps.last_message_time_ms() != last_gps_msg_ms && gps.status() >= AP_GPS::GPS_OK_FIX_3D){
+        last_gps_msg_ms = gps.last_message_time_ms();
+        if(get_gps_ms == 0){
+            get_gps_ms = AP_HAL::millis();
+        }else if(AP_HAL::millis() - get_gps_ms > 5000){
+            if(mission.starts_check_misson_cmd()){
+                set_mode(AUTO, MODE_REASON_GPS_GLITCH);
+                camera.set_trigger_distance(0);
+                if(emergency_return && mission.get_current_nav_index() < mission.num_commands() - 6){
+                    uint16_t seq = mission.num_commands() - 6;
+                    mission.set_current_cmd(seq);
+                    emergency_return = false;
+                }else if(mission.get_current_nav_index() < mission.num_commands() - 9){
+                    uint16_t seq = mission.num_commands() - 9;
+                    mission.set_current_cmd(seq);
+                }
+            }else{
+                set_mode(RTL, MODE_REASON_GPS_GLITCH);
+            }
+
+            if(emergency_return && no_gps_rtl_home_flag == NO_GPS_RTL_NEAR_HOME){
+                emergency_return = false;
+            }
+        }
+    }else if(gps.status() < AP_GPS::GPS_OK_FIX_3D){
+        get_gps_ms = 0;
+    }
+#endif
+}
 
 /*
   update AP_Stats
@@ -93,6 +467,25 @@ void Plane::stats_update(void)
     g2.stats.update();
 }
 
+/*
+  update raw data
+ */
+void Plane::raw_data_update(void)
+{
+	if(DataFlash.should_raw_data(0)) {
+    	DataFlash.Log_Write_Raw_Data(serial_manager);
+	} else {
+		AP_HAL::UARTDriver *uart_raw  = serial_manager.find_serial(AP_SerialManager::SerialProtocol_Nova_Rtcm, 0);
+		if(uart_raw != nullptr) {
+			uart_raw->flush();
+		}
+		DataFlash.StopRawData();
+	}
+
+	if(!DataFlash.should_pos_data(0)) {
+		DataFlash.StopPosData();
+	}
+}
 
 void Plane::setup() 
 {
@@ -316,6 +709,16 @@ void Plane::update_aux(void)
 
 void Plane::one_second_loop()
 {
+    //last location
+    static struct Location last_loc;
+    static uint8_t save_count = 0;
+    static bool    save_odometer_flag = false;
+    static uint32_t odometer_m = g.fly_odometer_m.get();
+    static uint8_t time_s  = g.fly_time_second.get();
+    static bool     save_time_flag = false;
+    bool arm_status;
+    Location new_loc;
+
     // send a heartbeat
     gcs().send_message(MSG_HEARTBEAT);
 
@@ -344,6 +747,10 @@ void Plane::one_second_loop()
     AP_Notify::flags.pre_arm_gps_check = true;
     AP_Notify::flags.armed = arming.is_armed() || arming.arming_required() == AP_Arming::NO;
 
+#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
+    sitl.is_arming = arming.is_armed() || arming.arming_required() == AP_Arming::NO;
+#endif
+
 #if AP_TERRAIN_AVAILABLE
     if (should_log(MASK_LOG_GPS)) {
         terrain.log_terrain_data(DataFlash);
@@ -367,6 +774,111 @@ void Plane::one_second_loop()
     // indicates that the sensor or subsystem is present but not
     // functioning correctly
     update_sensor_status_flags();
+
+    gcs().send_message(MSG_INDICATOR);
+
+    //Calculate the miles traveled and Statistical flight time
+    save_count++;
+    arm_status = arming.is_armed() || arming.arming_required() == AP_Arming::NO;
+
+    //Calculate the miles traveled
+    if(gps.status() >= AP_GPS::GPS_OK_FIX_3D && ahrs.get_position(new_loc)){
+        if(last_loc.lat != 0 || last_loc.lng != 0){
+            if(arm_status){
+                odometer_m += get_distance_cm(new_loc, last_loc)/100;
+                save_odometer_flag = true;
+            }
+        }
+        last_loc.lat = new_loc.lat;
+        last_loc.lng = new_loc.lng;
+        last_loc.alt = new_loc.alt;
+    }else{
+        last_loc.lat = 0;
+        last_loc.lng = 0;
+        last_loc.alt = 0;
+    }
+
+    //Save once in 10 seconds
+    if(save_count >= 10 || (!arm_status && save_odometer_flag)){
+        if(save_odometer_flag){
+            if(odometer_m >= 1000){
+                g.fly_odometer_km.set_and_save(g.fly_odometer_km + 1);
+                odometer_m -= 1000;
+            }
+
+            g.fly_odometer_m.set_and_save(odometer_m);
+            if(!arm_status){
+                save_odometer_flag = false;
+            }
+        }
+    }
+
+    //Statistical flight time
+    if(arm_status){
+        save_time_flag = true;
+        time_s++;
+    }
+
+    //Save once in 10 seconds
+    if(save_count >= 10 ||(!arm_status && save_time_flag)){
+        if(save_time_flag){
+            if(time_s >= 60){
+                if(g.fly_time_minute + 1 >= 60){
+                    g.fly_time_hour.set_and_save(g.fly_time_hour+1);
+                    g.fly_time_minute.set_and_save(0);
+                }else{
+                    g.fly_time_minute.set_and_save(g.fly_time_minute+1);
+                }
+                time_s -= 60;
+            }
+
+            g.fly_time_second.set_and_save(time_s);
+            if(!arm_status){
+                save_time_flag = false;
+            }
+        }
+    }
+
+    if(save_count >=10){
+        save_count = 0;
+    }
+
+    //config p900
+    set_p900_id();
+    get_p900_id();
+    set_p900_mode();
+
+	static bool reset_image_index_flag = true;
+	if(reset_image_index_flag && arming.is_armed()) {
+		camera.reset_image_index();
+		reset_image_index_flag = false;
+	}
+	if(!arming.is_armed()) {
+		reset_image_index_flag = true;
+	}
+
+    //Check the distance from the current location to the home point
+    if(auto_throttle_mode
+        && get_distance(home,current_loc) > g.fs_distance_to_home
+        && arming.is_armed()
+        && gps.status() >= AP_GPS::GPS_OK_FIX_3D){
+        if(control_mode != AUTO && mission.starts_check_misson_cmd()){
+            set_mode(AUTO, MODE_REASON_DISTANCE_TO_FAR);
+        }
+
+        if(control_mode == AUTO && mission.starts_check_misson_cmd()){
+            if(mission.get_current_nav_index() < mission.num_commands() - 9){
+                uint16_t seq = mission.num_commands() - 9;
+                camera.set_trigger_distance(0);
+                mission.set_current_cmd(seq);
+            }
+         }else{
+            set_mode(RTL, MODE_REASON_DISTANCE_TO_FAR);
+         }
+
+         event_report = PLANE_EVENT_REPORT_DISTANCE_PROTECTION;
+         gcs().send_message(MSG_EVENT_REPORT);
+    }
 }
 
 void Plane::log_perf_info()
@@ -471,9 +983,12 @@ void Plane::update_GPS_50Hz(void)
  */
 void Plane::update_GPS_10Hz(void)
 {
+    static uint32_t lost_gps_ms;
     static uint32_t last_gps_msg_ms;
     if (gps.last_message_time_ms() != last_gps_msg_ms && gps.status() >= AP_GPS::GPS_OK_FIX_3D) {
         last_gps_msg_ms = gps.last_message_time_ms();
+
+        lost_gps_ms = 0;
 
         if (ground_start_count > 1) {
             ground_start_count--;
@@ -516,6 +1031,21 @@ void Plane::update_GPS_10Hz(void)
     } else if (gps.status() < AP_GPS::GPS_OK_FIX_3D && ground_start_count != 0) {
         // lost 3D fix, start again
         ground_start_count = 5;
+
+        if(auto_throttle_mode
+            && control_mode != NO_GPS_RTL
+            && arming.is_armed()
+            && flight_stage == AP_Vehicle::FixedWing::FLIGHT_NORMAL){
+            if(lost_gps_ms == 0){
+                lost_gps_ms = AP_HAL::millis();
+            }else if(AP_HAL::millis() - lost_gps_ms > g.fs_lost_gps_ms){
+                    set_mode(NO_GPS_RTL, MODE_REASON_GPS_GLITCH);
+                    event_report = PLANE_EVENT_REPORT_LOST_GPS;
+                    gcs().send_message(MSG_EVENT_REPORT);
+            }
+        }else{
+            lost_gps_ms = 0;
+        }
     }
 
     calc_gndspeed_undershoot();
@@ -595,6 +1125,11 @@ void Plane::update_flight_mode(void)
         ahrs.set_fly_forward(landing.is_flying_forward());
     } else {
         ahrs.set_fly_forward(true);
+    }
+
+    if(servo_motor_test.running){
+        servo_motor_test_output();
+        return;
     }
 
     switch (effective_mode) 
@@ -746,6 +1281,12 @@ void Plane::update_flight_mode(void)
         calc_nav_pitch();
         calc_throttle();
         break;
+    case NO_GPS_RTL:
+        update_roll_no_gps_rtl();
+        update_load_factor();
+        calc_nav_pitch();
+        calc_throttle();
+        break;
 
     case MANUAL:
         SRV_Channels::set_output_scaled(SRV_Channel::k_aileron, channel_roll->get_control_in_zero_dz());
@@ -868,6 +1409,7 @@ void Plane::update_navigation()
     case AUTOTUNE:
     case FLY_BY_WIRE_B:
     case CIRCLE:
+    case NO_GPS_RTL: 
     case QSTABILIZE:
     case QHOVER:
     case QLOITER:

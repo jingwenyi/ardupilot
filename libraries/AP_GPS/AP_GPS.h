@@ -116,6 +116,10 @@ public:
        GPS_ALL_CONFIGURED = 255
    };
 
+   enum ALL_GPS_OK{
+      GPS_ALL_OK = 255   
+   };
+
     /*
       The GPS_State structure is filled in by the backend driver as it
       parses each message from the GPS.
@@ -133,14 +137,20 @@ public:
         uint16_t hdop;                      ///< horizontal dilution of precision in cm
         uint16_t vdop;                      ///< vertical dilution of precision in cm
         uint8_t num_sats;                   ///< Number of visible satellites
-        Vector3f velocity;                  ///< 3D velocity in m/s, in NED format
-        float speed_accuracy;               ///< 3D velocity RMS accuracy estimate in m/s
-        float horizontal_accuracy;          ///< horizontal RMS accuracy estimate in m
-        float vertical_accuracy;            ///< vertical RMS accuracy estimate in m
-        bool have_vertical_velocity:1;      ///< does GPS give vertical velocity? Set to true only once available.
-        bool have_speed_accuracy:1;         ///< does GPS give speed accuracy? Set to true only once available.
-        bool have_horizontal_accuracy:1;    ///< does GPS give horizontal position accuracy? Set to true only once available.
-        bool have_vertical_accuracy:1;      ///< does GPS give vertical position accuracy? Set to true only once available.
+
+        Vector3f velocity;                  ///< 3D velocitiy in m/s, in NED format
+        float heading;                      ///< GPS heading
+        float speed_accuracy;
+        float horizontal_accuracy;
+        float vertical_accuracy;
+        float heading_accuracy;
+        bool have_vertical_velocity:1;      ///< does this GPS give vertical velocity?
+        bool have_speed_accuracy:1;
+        bool have_horizontal_accuracy:1;
+        bool have_vertical_accuracy:1;
+        bool have_heading:1;                ///< does this GPS give heading?
+        bool have_heading_accuracy:1;
+        GPS_Status heading_status;          ///< driver heading fix status
         uint32_t last_gps_time_ms;          ///< the system time we got the last GPS timestamp, milliseconds
 
         // all the following fields must only all be filled by RTK capable backend drivers
@@ -205,6 +215,11 @@ public:
     bool vertical_accuracy(uint8_t instance, float &vacc) const;
     bool vertical_accuracy(float &vacc) const {
         return vertical_accuracy(primary_instance, vacc);
+    }
+
+    bool heading_accuracy(uint8_t instance, float &hacc) const;
+    bool heading_accuracy(float &hacc) const {
+        return heading_accuracy(primary_instance, hacc);
     }
 
     // 3D velocity in NED format
@@ -301,7 +316,14 @@ public:
         return last_message_time_ms(primary_instance);
     }
 
-    // return true if the GPS supports vertical velocity values
+    // RTK GPS heading
+    float get_heading(uint8_t instance) const {
+        return wrap_360(state[instance].heading + _head_offset);
+    }
+    float get_heading() const {
+        return get_heading(primary_instance);
+    }
+	// return true if the GPS supports vertical velocity values
     bool have_vertical_velocity(uint8_t instance) const {
         return state[instance].have_vertical_velocity;
     }
@@ -324,6 +346,30 @@ public:
     uint32_t rtk_age_ms(void) const {
         return rtk_age_ms(primary_instance);
     }
+
+// return true if the GPS supports vertical velocity values
+    bool have_heading(uint8_t instance) const {
+        return state[instance].have_heading;
+    }
+    bool have_heading(void) const {
+        return have_heading(primary_instance);
+    }
+
+    /// Query GPS heading status
+    GPS_Status heading_status(uint8_t instance) const {
+        return state[instance].heading_status;
+    }
+    GPS_Status heading_status(void) const {
+        return heading_status(primary_instance);
+    }
+
+    int8_t get_gps_type(uint8_t instance) const {
+        return gps_type[instance];
+    }
+    int8_t get_gps_type(void) const {
+        return get_gps_type(primary_instance);
+    }
+
 
     // the expected lag (in seconds) in the position and velocity readings from the gps
     // return true if the GPS hardware configuration is known or the lag parameter has been set manually
@@ -359,6 +405,7 @@ public:
 
     // Returns the index of the first unconfigured GPS (returns GPS_ALL_CONFIGURED if all instances report as being configured)
     uint8_t first_unconfigured_gps(void) const;
+    uint8_t all_gps_status_is_ok(void) const;
     void broadcast_first_configuration_failure_reason(void) const;
 
     // return true if all GPS instances have finished configuration
@@ -413,7 +460,7 @@ protected:
     AP_Int16 _delay_ms[GPS_MAX_RECEIVERS];
     AP_Int8 _blend_mask;
     AP_Float _blend_tc;
-
+    AP_Float _head_offset;
     uint32_t _log_gps_bit = -1;
 
 private:
@@ -435,6 +482,8 @@ private:
     GPS_State state[GPS_MAX_RECEIVERS+1];
     AP_GPS_Backend *drivers[GPS_MAX_RECEIVERS];
     AP_HAL::UARTDriver *_port[GPS_MAX_RECEIVERS];
+
+    int8_t gps_type[GPS_MAX_RECEIVERS];
 
     /// primary GPS instance
     uint8_t primary_instance:2;

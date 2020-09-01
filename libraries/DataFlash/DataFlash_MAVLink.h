@@ -29,32 +29,55 @@ public:
         { }
 
     // initialisation
-    void Init() override;
+    void Init(const AP_SerialManager& serial_manager) override;
 
     bool logging_started() const override { return _logging_started; }
 
+    bool raw_data_started() const override { return false; }
+	
+    bool pos_data_started() const override { return false; }
+
     void stop_logging() override;
+
+    void stop_raw_data() override { return ; }
+	
+    void stop_pos_data() override { return ; }
 
     /* Write a block of data at current offset */
     bool _WritePrioritisedBlock(const void *pBuffer, uint16_t size,
                                bool is_critical) override;
+	
+	bool _WriteRawData(const void *pBuffer, uint16_t size, bool is_critical) override { return true; }
 
+	bool _WritePosData(const void *pBuffer, uint16_t size, bool is_critical) override { return true; }
+	
     // initialisation
     bool CardInserted(void) const override { return true; }
 
     // erase handling
     void EraseAll() override {}
+    void EraseAllRawData() override {}
+    void EraseAllPosData() override {}
 
     bool NeedPrep() override { return false; }
     void Prep() override { }
 
     // high level interface
     uint16_t find_last_log(void) override { return 0; }
+	uint16_t find_last_raw_data(void) override { return 0; }
+	uint16_t find_last_pos_data(void) override { return 0; }
     void get_log_boundaries(uint16_t log_num, uint16_t & start_page, uint16_t & end_page) override {}
+    void get_raw_data_boundaries(uint16_t raw_num, uint16_t & start_page, uint16_t & end_page) override {}
+    void get_pos_data_boundaries(uint16_t pos_num, uint16_t & start_page, uint16_t & end_page) override {}
     void get_log_info(uint16_t log_num, uint32_t &size, uint32_t &time_utc) override {}
+    void get_raw_data_info(uint16_t raw_num, uint32_t &size, uint32_t &time_utc) override {}
+    void get_pos_data_info(uint16_t pos_num, uint32_t &size, uint32_t &time_utc) override {}
     int16_t get_log_data(uint16_t log_num, uint16_t page, uint32_t offset, uint16_t len, uint8_t *data) override { return 0; }
+    int16_t get_raw_data(uint16_t raw_num, uint16_t page, uint32_t offset, uint16_t len, uint8_t *data) override { return 0; }
+    int16_t get_pos_data(uint16_t raw_num, uint16_t page, uint32_t offset, uint16_t len, uint8_t *data) override { return 0; }
     uint16_t get_num_logs(void) override { return 0; }
-    
+    uint16_t get_num_raw_data(void) override { return 0; }
+    uint16_t get_num_pos_data(void) override { return 0; }
     void LogReadProcess(uint16_t log_num,
                         uint16_t start_page, uint16_t end_page, 
                         print_mode_fn printMode,
@@ -70,6 +93,8 @@ public:
 protected:
 
     bool WritesOK() const override;
+    bool RawDataWritesOK() const override {return false;}
+    bool PosDataWritesOK() const override {return false;}
 
 private:
 
@@ -179,9 +204,27 @@ private:
     uint16_t start_new_log(void) override {
         return 0;
     }
+	
+	uint16_t start_new_raw_data(void) override {
+		return 0;
+	};
+
+	uint16_t start_new_pos_data(void) override {
+		return 0;
+	};
+	
     bool ReadBlock(void *pkt, uint16_t size) override {
         return false;
     }
+
+	bool ReadRawData(void *pkt, uint16_t size) override {
+        return false;
+    }
+
+	bool ReadPosData(void *pkt, uint16_t size) override {
+        return false;
+    }
+	
     // performance counters
     AP_HAL::Util::perf_counter_t  _perf_errors;
     AP_HAL::Util::perf_counter_t  _perf_packing;

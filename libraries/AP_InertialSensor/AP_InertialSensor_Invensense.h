@@ -48,6 +48,7 @@ public:
     /* update accel and gyro state */
     bool update() override;
     void accumulate() override;
+    int16_t get_imu_type() override;
 
     /*
      * Return an AuxiliaryBus if the bus driver allows it
@@ -142,6 +143,8 @@ private:
         LowPassFilterVector3f accel_filter{4000, 188};
         LowPassFilterVector3f gyro_filter{8000, 188};
     } _accum;
+
+    int16_t dev_type;
 };
 
 class AP_Invensense_AuxiliaryBusSlave : public AuxiliaryBusSlave

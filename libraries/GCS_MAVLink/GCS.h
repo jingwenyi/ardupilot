@@ -74,6 +74,9 @@ enum ap_message {
     MSG_BATTERY_STATUS,
     MSG_AOA_SSA,
     MSG_LANDING,
+    MSG_INDICATOR,
+    MSG_P900_ID,
+    MSG_EVENT_REPORT,
     MSG_RETRY_DEFERRED // this must be last
 };
 
@@ -174,6 +177,9 @@ public:
     void send_vibration(const AP_InertialSensor &ins) const;
     void send_home(const Location &home) const;
     void send_heartbeat(uint8_t type, uint8_t base_mode, uint32_t custom_mode, uint8_t system_status);
+    void send_indicator(uint32_t indicator_status, float rtk_heading, float compass_heading, uint32_t odometer, uint32_t time);
+    void send_p900_id(uint8_t *return_p900_id, uint8_t count);
+    void send_event_report(uint8_t event_reprot);
     void send_servo_output_raw(bool hil);
     static void send_collision_all(const AP_Avoidance::Obstacle &threat, MAV_COLLISION_ACTION behaviour);
     void send_accelcal_vehicle_position(uint32_t position);
@@ -249,6 +255,7 @@ protected:
     void handle_mission_count(AP_Mission &mission, mavlink_message_t *msg);
     void handle_mission_write_partial_list(AP_Mission &mission, mavlink_message_t *msg);
     bool handle_mission_item(mavlink_message_t *msg, AP_Mission &mission);
+    void handle_single_point_message(AP_Mission &mission, mavlink_message_t *msg);
 
     void handle_param_set(mavlink_message_t *msg, DataFlash_Class *DataFlash);
     void handle_param_request_list(mavlink_message_t *msg);

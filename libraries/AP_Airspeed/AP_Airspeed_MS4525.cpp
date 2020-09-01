@@ -177,9 +177,12 @@ void AP_Airspeed_MS4525::_collect()
     float press2 = _get_pressure(dp_raw2);
     float temp  = _get_temperature(dT_raw);
     float temp2 = _get_temperature(dT_raw2);
-    
+
+	/* close voltage correction */
+#if 0	
     _voltage_correction(press, temp);
     _voltage_correction(press2, temp2);
+#endif
 
     if (sem->take(HAL_SEMAPHORE_BLOCK_FOREVER)) {
         _press_sum += press + press2;

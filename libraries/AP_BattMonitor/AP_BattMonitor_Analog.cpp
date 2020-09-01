@@ -12,7 +12,10 @@ AP_BattMonitor_Analog::AP_BattMonitor_Analog(AP_BattMonitor &mon, AP_BattMonitor
 {
     _volt_pin_analog_source = hal.analogin->channel(mon._volt_pin[_state.instance]);
     _curr_pin_analog_source = hal.analogin->channel(mon._curr_pin[_state.instance]);
-
+#if defined(CONFIG_ARCH_BOARD_UAVRS_V1)	
+	_copter_volt_pin_analog_source = hal.analogin->channel(mon._copter_volt_pin[_state.instance]);
+	_steer_volt_pin_analog_source = hal.analogin->channel(mon._steer_volt_pin[_state.instance]);
+#endif
     // always healthy
     _state.healthy = true;
 }
@@ -21,11 +24,12 @@ AP_BattMonitor_Analog::AP_BattMonitor_Analog(AP_BattMonitor &mon, AP_BattMonitor
 void
 AP_BattMonitor_Analog::read()
 {
-    // this copes with changing the pin at runtime
-    _volt_pin_analog_source->set_pin(_mon._volt_pin[_state.instance]);
-
     // get voltage
     _state.voltage = _volt_pin_analog_source->voltage_average() * _mon._volt_multiplier[_state.instance];
+#if defined(CONFIG_ARCH_BOARD_UAVRS_V1)	
+	_state.copter_voltage = _copter_volt_pin_analog_source->voltage_average() * _mon._volt_multiplier[_state.instance];
+	_state.steer_voltage = _steer_volt_pin_analog_source->voltage_average() * _mon._volt_multiplier[_state.instance];
+#endif
 
     // read current
     if (has_current()) {

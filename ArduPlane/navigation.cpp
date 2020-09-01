@@ -86,6 +86,9 @@ void Plane::navigate()
 
     // waypoint distance from plane
     // ----------------------------
+    if(control_mode == NO_GPS_RTL && emergency_return){
+        next_WP_loc.alt -= g.fs_nogps_rtl_sink_rate / 10;
+    }
     auto_state.wp_distance = get_distance(current_loc, next_WP_loc);
     auto_state.wp_proportion = location_path_proportion(current_loc, 
                                                         prev_WP_loc, next_WP_loc);

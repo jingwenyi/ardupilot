@@ -18,6 +18,7 @@
 #include <AP_HAL/AP_HAL.h>
 #include <AP_OpticalFlow/AP_OpticalFlow.h>
 #include <AP_Vehicle/AP_Vehicle.h>
+#include <AP_SerialManager/AP_SerialManager.h>
 
 #include "ap_version.h"
 #include "GCS.h"
@@ -404,6 +405,8 @@ void GCS_MAVLINK::handle_mission_request(AP_Mission &mission, mavlink_message_t 
         ret_packet.target_component = msg->compid;
         ret_packet.seq = packet.seq;
         ret_packet.command = cmd.id;
+        ret_packet.pointtype = cmd.type;
+        ret_packet.complete = cmd.complete;
 
         _mav_finalize_message_chan_send(chan, 
                                         MAVLINK_MSG_ID_MISSION_ITEM_INT,
@@ -454,6 +457,8 @@ void GCS_MAVLINK::handle_mission_request(AP_Mission &mission, mavlink_message_t 
         ret_packet.target_component = msg->compid;
         ret_packet.seq = packet.seq;
         ret_packet.command = cmd.id;
+        ret_packet.pointtype = cmd.type;
+        ret_packet.complete = cmd.complete;
 
         _mav_finalize_message_chan_send(chan, 
                                         MAVLINK_MSG_ID_MISSION_ITEM,
@@ -754,6 +759,70 @@ mission_ack:
 
     return mission_is_complete;
 }
+
+void GCS_MAVLINK::handle_single_point_message(AP_Mission &mission, mavlink_message_t *msg)
+{
+     MAV_MISSION_RESULT result = MAV_MISSION_ACCEPTED;
+     struct AP_Mission::Mission_Command cmd = {};
+
+     mavlink_mission_single_t packet;
+     mavlink_msg_mission_single_decode(msg, &packet);
+
+     if(packet.seq >= mission.num_commands()){
+        result = MAV_MISSION_ERROR;
+        goto mission_ack;
+     }
+
+      if(packet.pointtype == MAV_POINT_NORMAL_BEFOREHAND_WAYPOINT || packet.pointtype == MAV_POINT_NORMAL_TAKEPHOTO_WAYPOINT){
+          result = MAV_MISSION_UNSUPPORTED;
+          goto mission_ack;
+     }
+     
+     // convert mavlink packet to mission command
+     result = AP_Mission::mavlink_to_mission_cmd(packet, cmd);
+     if (result != MAV_MISSION_ACCEPTED) {
+          goto mission_ack;
+     }
+
+     result = MAV_MISSION_ERROR;
+     AP_Mission::Mission_Command temp;
+#if 0
+     //see all point
+     for(uint16_t i = 1; i < mission.num_commands(); i++) {
+        mission.read_cmd_from_storage(i, temp);
+        if(temp.type == cmd.type){
+            if (mission.replace_cmd(i,cmd)) {
+                result = MAV_MISSION_ACCEPTED;
+            }else{
+                result = MAV_MISSION_ERROR;
+                goto mission_ack;
+            }
+            break;
+        }
+     }
+#else
+    //Read the specified sailing point
+    mission.read_cmd_from_storage(packet.seq, temp);
+    if(temp.type == cmd.type){
+        if (mission.replace_cmd(packet.seq,cmd)) {
+            result = MAV_MISSION_ACCEPTED;
+        }
+    }
+
+#endif
+
+mission_ack:
+    // we are rejecting the mission/waypoint
+    mavlink_msg_mission_ack_send_buf(
+        msg,
+        chan,
+        msg->sysid,
+        msg->compid,
+        result,
+        MAV_MISSION_TYPE_SINGLE);
+
+}
+
 
 void 
 GCS_MAVLINK::handle_gps_inject(const mavlink_message_t *msg, AP_GPS &gps)
@@ -1549,6 +1618,31 @@ void GCS_MAVLINK::send_heartbeat(uint8_t type, uint8_t base_mode, uint32_t custo
         system_status);
 }
 
+void GCS_MAVLINK::send_indicator(uint32_t indicator_status, float rtk_heading, float compass_heading, uint32_t odometer, uint32_t time)
+{
+    mavlink_msg_indicator_status_send(
+        chan,
+        indicator_status,
+        rtk_heading,
+        compass_heading,
+        odometer,
+        time);
+}
+
+void GCS_MAVLINK::send_p900_id(uint8_t *return_p900_id, uint8_t count)
+{
+    mavlink_msg_plane_p900_id_send(
+        chan,
+        count,
+        return_p900_id);
+}
+
+void GCS_MAVLINK::send_event_report(uint8_t event_report)
+{
+    mavlink_msg_plane_event_report_send(chan, event_report);
+}
+
+
 float GCS_MAVLINK::adjust_rate_for_stream_trigger(enum streams stream_num)
 {
     // send at a much lower rate while handling waypoints and
@@ -1785,6 +1879,23 @@ void GCS_MAVLINK::handle_common_message(mavlink_message_t *msg)
     case MAVLINK_MSG_ID_LOG_REQUEST_END:
         /* fall through */
     case MAVLINK_MSG_ID_REMOTE_LOG_BLOCK_STATUS:
+        /* fall through */
+	case MAVLINK_MSG_ID_RAW_DATA_REQUEST_LIST:
+        /* fall through */
+    case MAVLINK_MSG_ID_RAW_DATA_REQUEST_DATA:
+        /* fall through */
+    case MAVLINK_MSG_ID_RAW_DATA_ERASE:
+        /* fall through */
+    case MAVLINK_MSG_ID_RAW_DATA_REQUEST_END:
+        /* fall through */
+	case MAVLINK_MSG_ID_POS_DATA_REQUEST_LIST:
+        /* fall through */
+    case MAVLINK_MSG_ID_POS_DATA_REQUEST_DATA:
+        /* fall through */
+    case MAVLINK_MSG_ID_POS_DATA_ERASE:
+        /* fall through */
+    case MAVLINK_MSG_ID_POS_DATA_REQUEST_END:
+        /* fall through */
         DataFlash_Class::instance()->handle_mavlink_msg(*this, msg);
         break;
 
@@ -1808,10 +1919,27 @@ void GCS_MAVLINK::handle_common_message(mavlink_message_t *msg)
     case MAVLINK_MSG_ID_MISSION_ACK:
         /* fall through */
     case MAVLINK_MSG_ID_MISSION_SET_CURRENT:
+        /* fall through */
+    case MAVLINK_MSG_ID_MISSION_SINGLE:
         handle_common_mission_message(msg);
         break;
 
     case MAVLINK_MSG_ID_GPS_RTCM_DATA:
+		mavlink_gps_rtcm_data_t packet;
+		mavlink_msg_gps_rtcm_data_decode(msg, &packet);
+		//gcs().send_text(MAV_SEVERITY_CRITICAL, "-------rtcm size:%d\r\n", packet.len);
+		#if 0
+		hal.uartB->write(packet.data, packet.len);
+		#else
+		AP_HAL::UARTDriver *uart_rtcm;
+		if(serialmanager_p != nullptr) {
+			uart_rtcm = serialmanager_p->find_serial(AP_SerialManager::SerialProtocol_Nova_Rtcm, 0);
+			if(uart_rtcm != nullptr) {
+				uart_rtcm->write(packet.data, packet.len);
+			}
+		}
+		#endif
+		break;
         /* fall through */
     case MAVLINK_MSG_ID_GPS_INPUT:
         /* fall through */
@@ -1892,6 +2020,9 @@ void GCS_MAVLINK::handle_common_mission_message(mavlink_message_t *msg)
 
     case MAVLINK_MSG_ID_MISSION_ACK:
         /* not used */
+        break;
+    case MAVLINK_MSG_ID_MISSION_SINGLE:
+        handle_single_point_message(*_mission, msg);
         break;
     }
 }

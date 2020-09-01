@@ -22,7 +22,7 @@
 #define AP_ARMING_COMPASS_MAGFIELD_MAX  875     // 1.65 * 530 milligauss
 #define AP_ARMING_BOARD_VOLTAGE_MIN     4.3f
 #define AP_ARMING_BOARD_VOLTAGE_MAX     5.8f
-#define AP_ARMING_ACCEL_ERROR_THRESHOLD 0.75f
+#define AP_ARMING_ACCEL_ERROR_THRESHOLD 1.5f
 
 extern const AP_HAL::HAL& hal;
 
@@ -69,6 +69,29 @@ const AP_Param::GroupInfo AP_Arming::var_info[] = {
     // @User: Standard
     AP_GROUPINFO("VOLT2_MIN",     5,     AP_Arming,  _min_voltage[1],  0),
 
+    // @Param: STEER_MIN
+    // @DisplayName: Arming voltage minimum on the third battery
+    // @Description: The minimum voltage on the first battery to arm, 0 disables the check
+    // @Units: V
+    // @Increment: 0.1
+    // @User: Standard
+    AP_GROUPINFO("STEER_MIN",     6,     AP_Arming,  _steer_voltage[0],  5.7f),
+
+    // @Param: STEER_MAX
+    // @DisplayName: Arming voltage minimum on the third battery
+    // @Description: The minimum voltage on the first battery to arm, 0 disables the check
+    // @Units: V
+    // @Increment: 0.1
+    // @User: Standard
+    AP_GROUPINFO("STEER_MAX",     7,     AP_Arming,  _steer_voltage[1],  6.3f),
+
+    // @Param: CPVOLT_MIN
+    // @DisplayName: Arming voltage minimum on the third battery
+    // @Description: The minimum voltage on the first battery to arm, 0 disables the check
+    // @Units: V
+    // @Increment: 0.1
+    // @User: Standard
+    AP_GROUPINFO("CPVO_MIN",     8,     AP_Arming,  _copter_voltage,  0),
     AP_GROUPEND
 };
 
@@ -131,7 +154,7 @@ bool AP_Arming::airspeed_checks(bool report)
         const AP_Airspeed *airspeed = ahrs.get_airspeed();
         if (airspeed == nullptr) {
             // not an airspeed capable vehicle
-            return true;
+            return false;
         }
         for (uint8_t i=0; i<AIRSPEED_MAX_SENSORS; i++) {
             if (airspeed->enabled(i) && airspeed->use(i) && !airspeed->healthy(i)) {
@@ -171,6 +194,19 @@ bool AP_Arming::ins_checks(bool report)
     if ((checks_to_perform & ARMING_CHECK_ALL) ||
         (checks_to_perform & ARMING_CHECK_INS)) {
         const AP_InertialSensor &ins = ahrs.get_ins();
+
+        if(ins.get_accel_count() != 2 || ins.get_gyro_count() != 2){
+             if (report) {
+                gcs().send_text(MAV_SEVERITY_CRITICAL, "PreArm: ins accel count != 2 or gyro count != 2");
+            }
+            return false;
+        }
+        if(ins.get_imu_id(0) != AP_InertialSensor_Backend::DEVTYPE_ADIS16375){
+            if (report) {
+                gcs().send_text(MAV_SEVERITY_CRITICAL, "PreArm: imu0 is not adi16375");
+            }
+            return false;
+        }
         if (!ins.get_gyro_health_all()) {
             if (report) {
                 gcs().send_text(MAV_SEVERITY_CRITICAL, "PreArm: Gyros not healthy");
@@ -385,6 +421,37 @@ bool AP_Arming::gps_checks(bool report)
         }
     }
 
+
+    if ((checks_to_perform & ARMING_CHECK_ALL) || (checks_to_perform & ARMING_CHECK_GPS)) {
+
+        // primary gps is rtk board?
+        if (gps.get_gps_type() != AP_GPS_Backend::DEVTYPE_OEM719) {
+            if (report) {
+                gcs().send_text(MAV_SEVERITY_CRITICAL, "PreArm: primary gps is not rtk board");
+            }
+            return false;
+        }
+
+        if(gps.get_gps_type() == AP_GPS_Backend::DEVTYPE_OEM719 && 
+                    gps.heading_status() != AP_GPS::GPS_OK_FIX_3D_RTK_FIXED){
+            if (report) {
+                gcs().send_text(MAV_SEVERITY_CRITICAL, "PreArm: rtk heading is not fix");
+            }
+            return false;
+        }
+    }
+
+    if ((checks_to_perform & ARMING_CHECK_ALL) || (checks_to_perform & ARMING_CHECK_GPS)) {
+
+        uint8_t all_gps_ok = gps.all_gps_status_is_ok();
+        if (all_gps_ok != AP_GPS::GPS_ALL_OK) {
+            if (report) {
+                gcs().send_text(MAV_SEVERITY_CRITICAL, "PreArm: GPS %d need 3d fix", all_gps_ok);
+            }
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -400,18 +467,42 @@ bool AP_Arming::battery_checks(bool report)
             return false;
         }
 
-        for (uint8_t i = 0; i < _battery.num_instances(); i++) {
-            if ((_min_voltage[i] > 0.0f) && (_battery.voltage(i) < _min_voltage[i])) {
+        if(!armed){
+            for (uint8_t i = 0; i < _battery.num_instances(); i++) {
+                if ((_min_voltage[i] > 0.0f) && (_battery.voltage(i) < _min_voltage[i])) {
+                    if (report) {
+                        gcs().send_text(MAV_SEVERITY_CRITICAL, "PreArm: Battery %d voltage %.1f below minimum %.1f",
+                                i+1,
+                                (double)_battery.voltage(i),
+                                (double)_min_voltage[i]);
+                    }
+                    return false;
+                }
+            }
+
+            //copter battery check
+            if((_copter_voltage > 0.0f) && (_battery.copter_voltage() < _copter_voltage)){
                 if (report) {
-                    gcs().send_text(MAV_SEVERITY_CRITICAL, "PreArm: Battery %d voltage %.1f below minimum %.1f",
-                            i+1,
-                            (double)_battery.voltage(i),
-                            (double)_min_voltage[i]);
+                        gcs().send_text(MAV_SEVERITY_CRITICAL, "PreArm: Copter Battery voltage %.1f below minimum %.1f",
+                                (double)_battery.copter_voltage(),
+                                (double)_copter_voltage);
                 }
                 return false;
             }
         }
-     }
+
+        //steer battery check
+        if((_steer_voltage[0] > 0.0f && _steer_voltage[1] > 0.0f)
+                            && (_battery.steer_voltage() < _steer_voltage[0] || _battery.steer_voltage() > _steer_voltage[1])){
+            if (report) {
+                gcs().send_text(MAV_SEVERITY_CRITICAL, "PreArm: Steer Battery voltage %.1f below minimum %.1f or up maximum %.1f",
+                           (double)_battery.steer_voltage(),
+                           (double)_steer_voltage[0],
+                           (double)_steer_voltage[1]);
+             }
+             return false;
+        }
+    }
     return true;
 }
 
@@ -478,15 +569,13 @@ bool AP_Arming::pre_arm_checks(bool report)
     }
 #endif
 
-    return hardware_safety_check(report)
-        &  barometer_checks(report)
+    return barometer_checks(report)
         &  ins_checks(report)
         &  compass_checks(report)
         &  gps_checks(report)
         &  battery_checks(report)
         &  logging_checks(report)
-        &  manual_transmitter_checks(report)
-        &  board_voltage_checks(report);
+        &  manual_transmitter_checks(report);
 }
 
 bool AP_Arming::arm_checks(uint8_t method)
@@ -567,3 +656,15 @@ AP_Arming::ArmingRequired AP_Arming::arming_required()
 {
     return (AP_Arming::ArmingRequired)require.get();
 }
+
+bool AP_Arming::ppk_checks(bool report)
+{
+	if(!DataFlash_Class::instance()->ppk_status) {
+		if (report) {
+			gcs().send_text(MAV_SEVERITY_CRITICAL, "PreArm: ppk is idle!");
+		}
+		return false;
+	}
+	return true;
+}
+

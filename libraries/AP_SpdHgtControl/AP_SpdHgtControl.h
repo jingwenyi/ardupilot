@@ -63,6 +63,12 @@ public:
 	// set path_proportion accessor
     virtual void set_path_proportion(float path_proportion) = 0;
 
+    //get current height estimate (above field elevation)
+    virtual float get_current_height_estimate() = 0;
+
+    //get height demands
+    virtual float get_height_demands() = 0;
+
 	// add new controllers to this enum. Users can then
 	// select which controller to use by setting the
 	// SPDHGT_CONTROLLER parameter

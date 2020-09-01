@@ -49,7 +49,7 @@ AP_Compass_UAVCAN::~AP_Compass_UAVCAN()
             if (ap_uavcan != nullptr) {
                 ap_uavcan->remove_mag_listener(this);
 
-                debug_mag_uavcan(2, "AP_Compass_UAVCAN destructed\n\r");
+                debug_mag_uavcan(2, "AP_Compass_UAVCAN destructed\n");
             }
         }
     }
@@ -68,7 +68,7 @@ AP_Compass_Backend *AP_Compass_UAVCAN::probe(Compass &compass)
                     if (freemag != UINT8_MAX) {
                         sensor = new AP_Compass_UAVCAN(compass);
                         if (sensor->register_uavcan_compass(i, freemag)) {
-                            debug_mag_uavcan(2, "AP_Compass_UAVCAN probed, drv: %d, node: %d\n\r", i, freemag);
+                            debug_mag_uavcan(2, "AP_Compass_UAVCAN probed, drv: %d, node: %d\n", i, freemag);
                             return sensor;
                         } else {
                             delete sensor;
@@ -115,10 +115,10 @@ bool AP_Compass_UAVCAN::register_uavcan_compass(uint8_t mgr, uint8_t node)
 
                 _sum.zero();
                 _count = 0;
-
+							
                 accumulate();
-
-                debug_mag_uavcan(2, "AP_Compass_UAVCAN loaded\n\r");
+				
+                debug_mag_uavcan(2, "AP_Compass_UAVCAN loaded\n");
 
                 return true;
             }
@@ -136,6 +136,11 @@ void AP_Compass_UAVCAN::read(void)
     }
 
     if (_mag_baro->take(HAL_SEMAPHORE_BLOCK_FOREVER)) {
+		#if 0
+		_sum.x *= 0.89f;
+		_sum.y *= 0.89f;
+		_sum.z *= 0.84f;
+		#endif
         _sum /= _count;
 
         publish_filtered_field(_sum, _instance);
@@ -147,8 +152,16 @@ void AP_Compass_UAVCAN::read(void)
 }
 
 void AP_Compass_UAVCAN::handle_mag_msg(Vector3f &mag)
-{
-    Vector3f raw_field = mag * 1000.0;
+{	
+	float _gain_scale = (1.0f / 1090) * 1000;
+
+    Vector3f raw_field = mag * _gain_scale;
+	//printf("raw_field [%.1f] [%.1f] [%.1f]\n", raw_field.x, raw_field.y, raw_field.z);
+
+	// rotate to the desired orientation
+    if (is_external(_instance)) {
+        raw_field.rotate(ROTATION_YAW_90);
+    }
 
     // rotate raw_field from sensor frame to body frame
     rotate_field(raw_field, _instance);
@@ -164,6 +177,11 @@ void AP_Compass_UAVCAN::handle_mag_msg(Vector3f &mag)
         // accumulate into averaging filter
         _sum += raw_field;
         _count++;
+
+		if (_count == 14) {
+            _sum /= 2;
+            _count = 7;
+        }
         _mag_baro->give();
     }
 }

@@ -31,7 +31,7 @@ public:
     //////////////////////////////////////////////////////////////////
     // STOP!!! DO NOT CHANGE THIS VALUE UNTIL YOU FULLY UNDERSTAND THE
     // COMMENTS ABOVE. IF UNSURE, ASK ANOTHER DEVELOPER!!!
-    static const uint16_t k_format_version = 13;
+    static const uint16_t k_format_version = 9527;
     //////////////////////////////////////////////////////////////////
 
 
@@ -351,6 +351,33 @@ public:
         k_param_DataFlash = 253, // Logging Group
 
         // 254,255: reserved
+
+        k_param_fly_odometer_km = 260,
+        k_param_fly_odometer_m = 261,
+        k_param_fly_time_hour = 262,
+        k_param_fly_time_minute = 263,
+        k_param_fly_time_second = 264,
+
+        //second low power
+        k_param_fs_batt_voltage2 = 265,
+        k_param_fs_batt_mah2 = 266,
+
+        //event fs
+        k_param_fs_event_timeout = 267,
+        k_param_fs_event_hight_m = 268,
+        k_param_fs_event_hight_land = 269,
+        k_param_disarm_hight = 270,
+        k_param_fs_assisted_timeout = 271,
+        k_param_fifth_rtl_limit_hight = 272,
+        k_param_fs_distance_to_home = 273,
+		k_param_fs_lost_gps_ms = 274,
+        k_param_track_heading_ki = 275,
+        k_param_track_heading_kp = 276,
+        k_param_track_time_gain = 277,
+        k_param_track_cirle_gain = 278,
+        k_param_track_Acceptable_angle = 279,
+        k_param_track_radius_gain = 280,
+        k_param_fs_nogps_rtl_sink_rate = 281,
     };
 
     AP_Int16 format_version;
@@ -435,6 +462,19 @@ public:
     AP_Int8 gcs_heartbeat_fs_enabled;
     AP_Float fs_batt_voltage;
     AP_Float fs_batt_mah;
+    AP_Float fs_batt_voltage2;
+    AP_Float fs_batt_mah2;
+    AP_Int16 fs_event_timeout;
+    AP_Int16 fs_assisted_timeout;
+    AP_Int16 fs_event_hight_m;
+    AP_Int16 fs_event_hight_land;
+    AP_Int16 fifth_rtl_limit_hight;
+    AP_Int32 fs_distance_to_home;
+	AP_Int16 fs_lost_gps_ms;
+    AP_Int16 fs_nogps_rtl_sink_rate;
+
+    
+    AP_Int16 disarm_hight;
 
     // Flight modes
     //
@@ -506,6 +546,12 @@ public:
 #endif
     AP_Int16 gcs_pid_mask;
     AP_Int8 parachute_channel;
+
+    AP_Int32 fly_odometer_km;
+    AP_Int16 fly_odometer_m;
+    AP_Int32 fly_time_hour;
+    AP_Int8  fly_time_minute;
+    AP_Int8  fly_time_second;
 };
 
 /*

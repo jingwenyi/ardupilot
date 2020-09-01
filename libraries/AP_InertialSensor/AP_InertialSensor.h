@@ -157,6 +157,8 @@ public:
     // temperature is available
     float get_temperature(uint8_t instance) const { return _temperature[instance]; }
 
+    uint16_t get_imu_id(uint8_t instance)   const { return _imu_type[instance];}
+
     /* get_delta_time returns the time period in seconds
      * overwhich the sensor data was collected
      */
@@ -294,6 +296,8 @@ private:
     uint16_t _sample_rate;
     float _loop_delta_t;
 
+    int16_t _imu_type[INS_MAX_INSTANCES];
+
     // Most recent accelerometer reading
     Vector3f _accel[INS_MAX_INSTANCES];
     Vector3f _delta_velocity[INS_MAX_INSTANCES];
@@ -374,6 +378,9 @@ private:
 
     // control enable of fast sampling
     AP_Int8     _fast_sampling_mask;
+
+    AP_Int8     _imu_adis;
+    AP_Int8     _imu_low;
 
     // board orientation from AHRS
     enum Rotation _board_orientation;

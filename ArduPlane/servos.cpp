@@ -617,6 +617,11 @@ void Plane::servos_twin_engine_mix(void)
 */
 void Plane::set_servos(void)
 {
+
+    
+    if(servo_motor_test.running){
+          return;
+      }
     // start with output corked. the cork is released when we run
     // servos_output(), which is run from all code paths in this
     // function

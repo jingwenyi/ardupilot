@@ -114,6 +114,16 @@ public:
     void use_synthetic_airspeed(void) {
         _use_synthetic_airspeed_once = true;
     }
+
+    //get current height estimate (above field elevation)
+    float get_current_height_estimate(){
+        return _height;
+    }
+
+    //get height demands
+    float get_height_demands(){
+        return _hgt_dem_adj;
+    }
     
     // this supports the TECS_* user settable parameters
     static const struct AP_Param::GroupInfo var_info[];

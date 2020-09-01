@@ -449,7 +449,9 @@ void Aircraft::update_dynamics(const Vector3f &rot_accel)
 
     // if we're on the ground, then our vertical acceleration is limited
     // to zero. This effectively adds the force of the ground on the aircraft
-    if (on_ground() && accel_earth.z > 0) {
+    if (on_ground() && !sitl->is_arming) {
+        accel_earth.x = 0;
+        accel_earth.y = 0;
         accel_earth.z = 0;
     }
 

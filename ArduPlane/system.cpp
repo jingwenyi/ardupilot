@@ -182,7 +182,7 @@ void Plane::init_ardupilot()
 #endif
 
 #if LOGGING_ENABLED == ENABLED
-    log_init();
+    log_init(serial_manager);
 #endif
 
     // initialise airspeed sensor
@@ -443,6 +443,24 @@ void Plane::set_mode(enum FlightMode mode, mode_reason_t reason)
         auto_navigation_mode = true;
         next_WP_loc.alt = current_loc.alt;
         break;
+    case NO_GPS_RTL:
+         // the altitude to circle at is taken from the current altitude
+        auto_throttle_mode = true;
+        auto_navigation_mode = true;
+        next_WP_loc.alt = current_loc.alt;
+        Location cur_loc;
+        ahrs.get_position(cur_loc);
+        distance_to_home = get_distance(cur_loc, home);
+        heading_to_home = get_bearing_cd(cur_loc, home)*0.01;
+        if(distance_to_home < 300){
+            no_gps_rtl_home_flag = NO_GPS_RTL_NEAR_HOME;
+            emergency_return = true;
+        }else{
+            no_gps_rtl_home_flag = NO_GPS_RTL_NONE;
+        }
+        gcs().send_text(MAV_SEVERITY_CRITICAL, "NO_GPS_RTL flag:%d, distanc:%4.2lf, heading:%3.2lf",
+                                            no_gps_rtl_home_flag, (double)distance_to_home, (double)heading_to_home);
+        break;
 
     case AUTO:
         auto_throttle_mode = true;
@@ -547,6 +565,7 @@ bool Plane::mavlink_set_mode(uint8_t mode)
     case QLOITER:
     case QLAND:
     case QRTL:
+    case NO_GPS_RTL:
         set_mode((enum FlightMode)mode, MODE_REASON_GCS_COMMAND);
         return true;
     }
@@ -577,14 +596,15 @@ void Plane::check_long_failsafe()
     // only act on changes
     // -------------------
     if (failsafe.state != FAILSAFE_LONG && failsafe.state != FAILSAFE_GCS && flight_stage != AP_Vehicle::FixedWing::FLIGHT_LAND) {
-        if (failsafe.state == FAILSAFE_SHORT &&
+        if (!auto_throttle_mode && failsafe.state == FAILSAFE_SHORT &&
                    (tnow - failsafe.ch3_timer_ms) > g.long_fs_timeout*1000) {
             failsafe_long_on_event(FAILSAFE_LONG, MODE_REASON_RADIO_FAILSAFE);
         } else if (g.gcs_heartbeat_fs_enabled == GCS_FAILSAFE_HB_AUTO && control_mode == AUTO &&
                    failsafe.last_heartbeat_ms != 0 &&
                    (tnow - failsafe.last_heartbeat_ms) > g.long_fs_timeout*1000) {
             failsafe_long_on_event(FAILSAFE_GCS, MODE_REASON_GCS_FAILSAFE);
-        } else if (g.gcs_heartbeat_fs_enabled == GCS_FAILSAFE_HEARTBEAT &&
+        } else if (!emergency_return && flight_stage == AP_Vehicle::FixedWing::FLIGHT_NORMAL && arming.is_armed() &&
+                    g.gcs_heartbeat_fs_enabled == GCS_FAILSAFE_HEARTBEAT &&
                    failsafe.last_heartbeat_ms != 0 &&
                    (tnow - failsafe.last_heartbeat_ms) > g.long_fs_timeout*1000) {
             failsafe_long_on_event(FAILSAFE_GCS, MODE_REASON_GCS_FAILSAFE);
@@ -689,6 +709,9 @@ void Plane::print_flight_mode(AP_HAL::BetterStream *port, uint8_t mode)
         break;
     case CIRCLE:
         port->printf("Circle");
+        break;
+    case NO_GPS_RTL:
+        port->printf("NO_GPS_RTL");
         break;
     case STABILIZE:
         port->printf("Stabilize");
@@ -814,6 +837,8 @@ void Plane::notify_flight_mode(enum FlightMode mode)
     case QRTL:
         notify.set_flight_mode_str("QRTL");
         break;
+    case NO_GPS_RTL:
+        notify.set_flight_mode_str("NOGPSRTL");
     default:
         notify.set_flight_mode_str("----");
         break;
@@ -886,6 +911,13 @@ bool Plane::arm_motors(AP_Arming::ArmingMethod method)
  */
 bool Plane::disarm_motors(void)
 {
+    float alt = 0.0f;
+    ahrs.get_relative_position_D_home(alt);
+
+    if(-alt > g.disarm_hight){
+        gcs().send_text(MAV_SEVERITY_INFO,"The current height %4.2lfm accepts a disarm common.", (double)-alt);
+        return false;
+    }
     if (!arming.disarm()) {
         return false;
     }

@@ -273,13 +273,17 @@ struct PACKED log_Control_Tuning {
     int16_t rudder_out;
     int16_t throttle_dem;
     float airspeed_estimate;
+    float    inav_alt;
+    float  baro_alt;
 };
 
 // Write a control tuning packet. Total length : 22 bytes
 void Plane::Log_Write_Control_Tuning()
 {
     float est_airspeed = 0;
+    float alt = 0;
     ahrs.airspeed_estimate(&est_airspeed);
+    ahrs.get_relative_position_D_home(alt);
     
     struct log_Control_Tuning pkt = {
         LOG_PACKET_HEADER_INIT(LOG_CTUN_MSG),
@@ -291,7 +295,9 @@ void Plane::Log_Write_Control_Tuning()
         throttle_out    : (int16_t)SRV_Channels::get_output_scaled(SRV_Channel::k_throttle),
         rudder_out      : (int16_t)SRV_Channels::get_output_scaled(SRV_Channel::k_rudder),
         throttle_dem    : (int16_t)SpdHgt_Controller->get_throttle_demand(),
-        airspeed_estimate : est_airspeed
+        airspeed_estimate : est_airspeed,
+        inav_alt            : -alt,
+        baro_alt            : barometer.get_altitude()
     };
     DataFlash.WriteBlock(&pkt, sizeof(pkt));
 }
@@ -535,7 +541,7 @@ const struct LogStructure Plane::log_structure[] = {
     { LOG_STARTUP_MSG, sizeof(log_Startup),         
       "STRT", "QBH",         "TimeUS,SType,CTot" },
     { LOG_CTUN_MSG, sizeof(log_Control_Tuning),     
-      "CTUN", "Qcccchhhf",    "TimeUS,NavRoll,Roll,NavPitch,Pitch,ThrOut,RdrOut,ThrDem,Aspd" },
+      "CTUN", "Qcccchhhfff",    "TimeUS,NavRoll,Roll,NavPitch,Pitch,ThrOut,RdrOut,ThrDem,Aspd,Alt,BAlt"},
     { LOG_NTUN_MSG, sizeof(log_Nav_Tuning),         
       "NTUN", "Qfcccfff",  "TimeUS,WpDist,TargBrg,NavBrg,AltErr,XT,XTi,ArspdErr" },
     { LOG_SONAR_MSG, sizeof(log_Sonar),             
@@ -595,9 +601,9 @@ void Plane::Log_Write_Vehicle_Startup_Messages()
 /*
   initialise logging subsystem
  */
-void Plane::log_init(void)
+void Plane::log_init(const AP_SerialManager& serial_manager_log)
 {
-    DataFlash.Init(log_structure, ARRAY_SIZE(log_structure));
+    DataFlash.Init(log_structure, ARRAY_SIZE(log_structure), serial_manager_log);
 
     gcs().reset_cli_timeout();
 }
@@ -639,6 +645,6 @@ void Plane::Log_Write_Home_And_Origin() {}
 void Plane::Log_Read(uint16_t log_num, int16_t start_page, int16_t end_page) {}
  #endif // CLI_ENABLED
 
-void Plane::log_init(void) {}
+void Plane::log_init(const AP_SerialManager& serial_manager_log) {}
 
 #endif // LOGGING_ENABLED

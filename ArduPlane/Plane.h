@@ -156,6 +156,57 @@ public:
     void loop() override;
 
 private:
+    enum P900_MODE_TYPE{
+        P900_P2P = 0,
+        P900_MESH = 1
+    };
+    enum NO_GPS_RTL_STATUS{
+        NO_GPS_RTL_NONE = 0,
+        NO_GPS_RTL_HEADING_ONLIN = 1,
+        NO_GPS_RTL_HEADING_TRACK = 2,
+        NO_GPS_RTL_NEAR_HOME = 3
+    };
+    enum NO_GPS_RTL_STATUS no_gps_rtl_home_flag;
+    float distance_to_home;
+    float heading_to_home;
+    bool gcs_set_p900_id_flag;
+    bool gcs_get_p900_id_flag;
+    bool gcs_set_p900_mode_flag;
+    bool p900_read_mutex;
+    bool p900_write_mutex;
+    bool p900_set_mode_mutex;
+    uint8_t p900_id[20];
+    uint8_t return_p900_id[20];
+    uint8_t p900_mode;
+    uint8_t p900_mac[40];
+    bool emergency_return;
+    uint8_t event_report;
+    //plane indicator status
+    struct indicator_status{
+        uint32_t barometer_status               : 1; //bit1  0:bad, 1:healthy
+        uint32_t ins_status                     : 1; //bit2  0:bad, 1:healthy
+        uint32_t compass_status                 : 1; //bit3  0:bad, 1:healthy
+        uint32_t gps_status                     : 1; //bit4  0:bad, 1:healthy
+        uint32_t plane_battery_status           : 1; //bit5  0:bad, 1:healthy
+        uint32_t copter_battery_status          : 1; //bit6  0:bad, 1:healthy
+        uint32_t sdcard_status                  : 1; //bit7  0:bad, 1:healthy
+        uint32_t radio_status                   : 1; //bit8  0:bad, 1:healthy
+        uint32_t board_voltage_status           : 1; //bit9  0:bad, 1:healthy
+        uint32_t airspeed_status                : 1; //bit10  0:bad, 1:healthy
+        uint32_t rtk_head_status                : 1; //bit11  0:bad, 1:healthy
+        uint32_t eeprom_status                  : 1; //bit12  0:bad, 1:healthy
+        uint32_t hardware_safety_status         : 1; //bit13  0:bad, 1:healthy
+        uint32_t rtk_compass_diff               : 1; //bit14  0:bad, 1:healthy
+        uint32_t ppk_status						: 1; //bit15 0:idle, 1:runing
+        uint32_t resave                         : 17; //resave
+    };
+    //load param status
+    enum  LOAD_PARAM_stauts{
+        LOAD_PARAM_OK = 0,
+        LOAD_PARAM_FAILED = 1,
+        PARAM_VERSION_ERR = 2
+    };
+    enum LOAD_PARAM_stauts load_param_flag;
     // key aircraft parameters passed to multiple libraries
     AP_Vehicle::FixedWing aparm;
     AP_HAL::BetterStream* cliSerial;
@@ -329,6 +380,9 @@ private:
 
         // flag to hold whether battery low voltage threshold has been breached
         uint8_t low_battery:1;
+
+        // flag to hold whether battery low voltage threshold has been breached
+        uint8_t low_battery2:1;
 
         // true if an adsb related failsafe has occurred
         uint8_t adsb:1;
@@ -761,6 +815,15 @@ private:
         uint32_t last_trim_save;
     } auto_trim;
 
+     struct {
+        bool running;
+        uint32_t start_ms;            // system time the motor test began
+        uint32_t timeout_ms = 0;      // test will timeout this many milliseconds after the motor_test_start_ms
+        uint8_t seq = 0;              // motor sequence number of motor being tested
+        uint8_t servo_type = 0;    // motor throttle type (0=throttle percentage, 1=PWM, 2=pilot throttle channel pass-through)
+        uint16_t value = 0;  // throttle to be sent to motor, value depends upon it's type
+    } servo_motor_test;
+
     // last time home was updated while disarmed
     uint32_t last_home_update_ms;
     
@@ -802,7 +865,11 @@ private:
     
     void adjust_nav_pitch_throttle(void);
     void update_load_factor(void);
+    void update_roll_no_gps_rtl(void);
     void send_heartbeat(mavlink_channel_t chan);
+    void send_indicator(mavlink_channel_t chan);
+    void send_p900_id(mavlink_channel_t chan);
+    void send_event_report(mavlink_channel_t chan);
     void send_attitude(mavlink_channel_t chan);
     void send_fence_status(mavlink_channel_t chan);
     void update_sensor_status_flags(void);
@@ -907,6 +974,7 @@ private:
     void failsafe_long_on_event(enum failsafe_state fstype, mode_reason_t reason);
     void failsafe_short_off_event(mode_reason_t reason);
     void low_battery_event(void);
+    void low_battery_event2(void);
     void update_events(void);
     uint8_t max_fencepoints(void);
     Vector2l get_fence_point_with_index(unsigned i);
@@ -963,6 +1031,8 @@ private:
     void rpm_update(void);
     void button_update(void);
     void stats_update();
+	void raw_data_update();
+    void emergency_events(void);
     void ice_update(void);
     void report_radio();
     void report_ins();
@@ -1093,7 +1163,7 @@ private:
     void print_flight_mode(AP_HAL::BetterStream *port, uint8_t mode);
     void notify_flight_mode(enum FlightMode mode);
     void run_cli(AP_HAL::UARTDriver *port);
-    void log_init();
+    void log_init(const AP_SerialManager& serial_manager_log);
     void init_capabilities(void);
     void dataflash_periodic(void);
     void parachute_check();
@@ -1139,6 +1209,16 @@ public:
     int8_t test_airspeed(uint8_t argc, const Menu::arg *argv);
     int8_t test_pressure(uint8_t argc, const Menu::arg *argv);
     int8_t test_shell(uint8_t argc, const Menu::arg *argv);
+
+    void servo_motor_test_output();
+
+    uint8_t mavlink_servo_motor_test_start(mavlink_channel_t chan, uint8_t type,
+                                            uint16_t value, float timeout_sec);
+    void servo_motor_test_stop();
+
+    void get_p900_id();
+    void set_p900_id();
+    void set_p900_mode();
 };
 
 #define MENU_FUNC(func) FUNCTOR_BIND(&plane, &Plane::func, int8_t, uint8_t, const Menu::arg *)

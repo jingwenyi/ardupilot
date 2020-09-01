@@ -12,7 +12,7 @@ const AP_Param::GroupInfo AP_BattMonitor::var_info[] = {
     // @Description: Controls enabling monitoring of the battery's voltage and current
     // @Values: 0:Disabled,3:Analog Voltage Only,4:Analog Voltage and Current,5:Solo,6:Bebop,7:SMBus-Maxell
     // @User: Standard
-    AP_GROUPINFO("_MONITOR", 0, AP_BattMonitor, _monitoring[0], BattMonitor_TYPE_NONE),
+    AP_GROUPINFO("_MONITOR", 0, AP_BattMonitor, _monitoring[0], BattMonitor_TYPE_ANALOG_VOLTAGE_ONLY),
 
     // @Param: _VOLT_PIN
     // @DisplayName: Battery Voltage sensing pin
@@ -159,6 +159,14 @@ const AP_Param::GroupInfo AP_BattMonitor::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("_LOW_TYPE", 22, AP_BattMonitor, _low_voltage_source, BattMonitor_LowVoltageSource_Raw),
 
+#ifdef AP_BATT_COPTER_VOLT_PIN
+    AP_GROUPINFO("_COPTER_PIN", 23, AP_BattMonitor, _copter_volt_pin[0], AP_BATT_COPTER_VOLT_PIN),
+#endif
+
+#ifdef AP_BATT_STEERING_GEAR_VOLT_PIN
+	AP_GROUPINFO("_STEER_PIN", 24, AP_BattMonitor, _steer_volt_pin[0], AP_BATT_STEERING_GEAR_VOLT_PIN),
+#endif
+
     AP_GROUPEND
 };
 
@@ -269,6 +277,26 @@ float AP_BattMonitor::voltage(uint8_t instance) const
     }
 }
 
+/// copter_voltage - returns battery copter voltage in volts
+float AP_BattMonitor::copter_voltage(uint8_t instance) const
+{
+    if (instance < _num_instances) {
+        return _BattMonitor_STATE(instance).copter_voltage;
+    } else {
+        return 0.0f;
+    }
+}
+
+/// steer_voltage - returns battery steer voltage in volts
+float AP_BattMonitor::steer_voltage(uint8_t instance) const
+{
+    if (instance < _num_instances) {
+        return _BattMonitor_STATE(instance).steer_voltage;
+    } else {
+        return 0.0f;
+    }
+}
+
 /// get voltage with sag removed (based on battery current draw and resistance)
 /// this will always be greater than or equal to the raw voltage
 float AP_BattMonitor::voltage_resting_estimate(uint8_t instance) const
@@ -360,6 +388,48 @@ bool AP_BattMonitor::exhausted(uint8_t instance, float low_voltage, float min_ca
     // if we've gotten this far then battery is ok
     return false;
 }
+
+ 
+ bool AP_BattMonitor::exhausted2(uint8_t instance, float low_voltage, float min_capacity_mah)
+ {
+     // exit immediately if no monitors setup
+     if (_num_instances == 0 || instance >= _num_instances) {
+         return false;
+     }
+ 
+     // use voltage or sag compensated voltage
+     float voltage_used;
+     switch ((enum BattMonitor_LowVoltage_Source)_low_voltage_source.get()) {
+         case BattMonitor_LowVoltageSource_Raw:
+         default:
+             voltage_used = state[instance].voltage;
+             break;
+         case BattMonitor_LowVoltageSource_SagCompensated:
+             voltage_used = voltage_resting_estimate(instance);
+             break;
+     }
+ 
+     // check voltage
+     if ((voltage_used > 0) && (low_voltage > 0) && (voltage_used < low_voltage)) {
+         // this is the first time our voltage has dropped below minimum so start timer
+         if (state[instance].low_voltage2_start_ms == 0) {
+             state[instance].low_voltage2_start_ms = AP_HAL::millis();
+         } else if (_low_voltage_timeout > 0 && AP_HAL::millis() - state[instance].low_voltage2_start_ms > uint32_t(_low_voltage_timeout.get())*1000U) {
+             return true;
+         }
+     } else {
+         // acceptable voltage so reset timer
+         state[instance].low_voltage2_start_ms = 0;
+     }
+ 
+     // check capacity if current monitoring is enabled
+     if (has_current(instance) && (min_capacity_mah > 0) && (_pack_capacity[instance] - state[instance].current_total_mah < min_capacity_mah)) {
+         return true;
+     }
+ 
+     // if we've gotten this far then battery is ok
+     return false;
+ }
 
 // return true if any battery is pushing too much power
 bool AP_BattMonitor::overpower_detected() const

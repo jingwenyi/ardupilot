@@ -10,6 +10,9 @@
 #include <AP_Motors/AP_Motors.h>
 #include <AC_AttitudeControl/AC_AttitudeControl.h>
 #include <AC_AttitudeControl/AC_PosControl.h>
+#include <GCS_MAVLink/GCS.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include "DataFlash.h"
 #include "DataFlash_File.h"
@@ -250,6 +253,8 @@ void DataFlash_Class::Log_Write_GPS(const AP_GPS &gps, uint8_t i, uint64_t time_
         time_us = AP_HAL::micros64();
     }
     const struct Location &loc = gps.location(i);
+    //0x10: use; 0x00: not use
+    uint8_t use = gps.get_gps_type(i) + (gps.primary_sensor() == i ? 16:0);
     struct log_GPS pkt = {
         LOG_PACKET_HEADER_INIT((uint8_t)(LOG_GPS_MSG+i)),
         time_us       : time_us,
@@ -264,15 +269,16 @@ void DataFlash_Class::Log_Write_GPS(const AP_GPS &gps, uint8_t i, uint64_t time_
         ground_speed  : gps.ground_speed(i),
         ground_course : gps.ground_course(i),
         vel_z         : gps.velocity(i).z,
-        used          : (uint8_t)(gps.primary_sensor() == i)
+        used          : use
     };
     WriteBlock(&pkt, sizeof(pkt));
 
     /* write auxiliary accuracy information as well */
-    float hacc = 0, vacc = 0, sacc = 0;
+    float hacc = 0, vacc = 0, sacc = 0, hdgacc = 0;
     gps.horizontal_accuracy(i, hacc);
     gps.vertical_accuracy(i, vacc);
     gps.speed_accuracy(i, sacc);
+    gps.heading_accuracy(i, hdgacc);
     struct log_GPA pkt2 = {
         LOG_PACKET_HEADER_INIT((uint8_t)(LOG_GPA_MSG+i)),
         time_us       : time_us,
@@ -281,7 +287,10 @@ void DataFlash_Class::Log_Write_GPS(const AP_GPS &gps, uint8_t i, uint64_t time_
         vacc          : (uint16_t)MIN((vacc*100), UINT16_MAX),
         sacc          : (uint16_t)MIN((sacc*100), UINT16_MAX),
         have_vv       : (uint8_t)gps.have_vertical_velocity(i),
-        sample_ms     : gps.last_message_time_ms(i)
+        sample_ms     : gps.last_message_time_ms(i),
+        hdgs          : gps.heading_status(i),
+        hdg           : gps.get_heading(i),
+        hdgacc        : (uint16_t)(hdgacc*100)
     };
     WriteBlock(&pkt2, sizeof(pkt2));
 }
@@ -1522,9 +1531,44 @@ void DataFlash_Class::Log_Write_CameraInfo(enum LogMessages msg, const AP_AHRS &
     WriteCriticalBlock(&pkt, sizeof(pkt));
 }
 
+
+// Write a Pos packet
+void DataFlash_Class::Pos_Write_CameraInfo(enum LogMessages msg, const AP_AHRS &ahrs, const AP_GPS &gps, const Location &current_loc)
+{
+    int32_t altitude, altitude_rel, altitude_gps;
+    if (current_loc.flags.relative_alt) {
+        altitude = current_loc.alt+ahrs.get_home().alt;
+        altitude_rel = current_loc.alt;
+    } else {
+        altitude = current_loc.alt;
+        altitude_rel = current_loc.alt - ahrs.get_home().alt;
+    }
+    if (gps.status() >= AP_GPS::GPS_OK_FIX_3D) {
+        altitude_gps = gps.location().alt;
+    } else {
+        altitude_gps = 0;
+    }
+
+    struct log_Camera pkt = {
+        LOG_PACKET_HEADER_INIT(static_cast<uint8_t>(msg)),
+        time_us     : AP_HAL::micros64(),
+        gps_time    : gps.time_week_ms(),
+        gps_week    : gps.time_week(),
+        latitude    : current_loc.lat,
+        longitude   : current_loc.lng,
+        altitude    : altitude,
+        altitude_rel: altitude_rel,
+        altitude_gps: altitude_gps,
+        roll        : (int16_t)ahrs.roll_sensor,
+        pitch       : (int16_t)ahrs.pitch_sensor,
+        yaw         : (uint16_t)ahrs.yaw_sensor
+    };
+    WritePosData(&pkt, sizeof(pkt));
+}
+
 // Write a Camera packet
 void DataFlash_Class::Log_Write_Camera(const AP_AHRS &ahrs, const AP_GPS &gps, const Location &current_loc)
-{
+{		
     Log_Write_CameraInfo(LOG_CAMERA_MSG, ahrs, gps, current_loc);
 }
 
@@ -1580,6 +1624,8 @@ void DataFlash_Class::Log_Write_Current(const AP_BattMonitor &battery)
             LOG_PACKET_HEADER_INIT(LOG_CURRENT_MSG),
             time_us             : AP_HAL::micros64(),
             voltage             : battery.voltage(0),
+            copter_voltage      : battery.copter_voltage(0),
+            steer_voltage       : battery.steer_voltage(0),
             voltage_resting     : battery.voltage_resting_estimate(0),
             current_amps        : battery.current_amps(0),
             current_total       : battery.current_total_mah(0),
@@ -1614,6 +1660,8 @@ void DataFlash_Class::Log_Write_Current(const AP_BattMonitor &battery)
             LOG_PACKET_HEADER_INIT(LOG_CURRENT2_MSG),
             time_us             : AP_HAL::micros64(),
             voltage             : battery.voltage(1),
+            copter_voltage      : battery.copter_voltage(1),
+            steer_voltage       : battery.steer_voltage(1),
             voltage_resting     : battery.voltage_resting_estimate(1),
             current_amps        : battery.current_amps(1),
             current_total       : battery.current_total_mah(1),
@@ -1636,6 +1684,32 @@ void DataFlash_Class::Log_Write_Current(const AP_BattMonitor &battery)
             WriteBlock(&cell_pkt, sizeof(cell_pkt));
         }
     }
+}
+
+void DataFlash_Class::Log_Write_Raw_Data(const AP_SerialManager &manager)
+{
+	AP_HAL::UARTDriver *uart_raw;
+	uint8_t buffer[1024] = {0};
+	uint32_t i = 0;
+
+	uart_raw = manager.find_serial(AP_SerialManager::SerialProtocol_Nova_Rtcm, 0);
+	if(uart_raw != nullptr) {
+		int16_t nbytes = uart_raw->available();
+
+		if(nbytes > sizeof(buffer)) {
+			gcs().send_text(MAV_SEVERITY_INFO, "Log_Write_Raw_Data over len %d", nbytes);
+			//printf( "Log_Write_Raw_Data over len %d\n", nbytes);
+			nbytes = sizeof(buffer);
+		}
+
+		while(nbytes-- > 0) {
+			buffer[i++] = uart_raw->read();
+		}				
+
+		if(i > 0) {
+			WriteRawData(buffer, i);
+		}
+	}
 }
 
 // Write a Compass packet

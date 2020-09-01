@@ -38,7 +38,7 @@
 # define AP_SERIALMANAGER_CONSOLE_BUFSIZE_TX    512
 
 // mavlink default baud rates and buffer sizes
-#define AP_SERIALMANAGER_MAVLINK_BAUD           57600
+#define AP_SERIALMANAGER_MAVLINK_BAUD           115200
 #define AP_SERIALMANAGER_MAVLINK_BUFSIZE_RX     128
 #define AP_SERIALMANAGER_MAVLINK_BUFSIZE_TX     256
 
@@ -69,11 +69,20 @@
 #define AP_SERIALMANAGER_ULANDING_BUFSIZE_RX     128
 #define AP_SERIALMANAGER_ULANDING_BUFSIZE_TX     128
 
+// Nova RTK default baud rates and buffer sizes
+#define AP_SERIALMANAGER_RTCM_BAUD           460800
+#define AP_SERIALMANAGER_RTCM_BUFSIZE_RX     2048
+#define AP_SERIALMANAGER_RTCM_BUFSIZE_TX     256
+
+// save log default baud rates and buffer sizes
+#define AP_SERIALMANAGER_SAVELOG_BAUD           460800
+#define AP_SERIALMANAGER_SAVELOG_BUFSIZE_RX     128
+#define AP_SERIALMANAGER_SAVELOG_BUFSIZE_TX     512
+
 
 class AP_SerialManager {
 
 public:
-
     enum SerialProtocol {
         SerialProtocol_None = -1,
         SerialProtocol_Console = 0, // unused
@@ -89,7 +98,9 @@ public:
         SerialProtocol_FrSky_SPort_Passthrough = 10, // FrSky SPort Passthrough (OpenTX) protocol (X-receivers)
         SerialProtocol_Lidar360 = 11,                // Lightware SF40C or TeraRanger Tower
         SerialProtocol_Aerotenna_uLanding      = 12, // Ulanding support
-        SerialProtocol_Beacon = 13
+        SerialProtocol_Beacon = 13,
+        SerialProtocol_Nova_Rtcm = 14,
+        SerialProtocol_Save_Log = 15
     };
 
     // Constructor
@@ -129,8 +140,7 @@ public:
     // parameter var table
     static const struct AP_Param::GroupInfo var_info[];
 
-private:
-
+private:	
     // array of uart info
     struct {
         AP_Int8 protocol;

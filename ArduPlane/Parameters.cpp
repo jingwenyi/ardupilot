@@ -1,4 +1,18 @@
 #include "Plane.h"
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <assert.h>
+#include <AP_Math/AP_Math.h>
+#include <stdio.h>
+#include <time.h>
+#include <dirent.h>
+
 
 /*
  *  ArduPlane parameter definitions
@@ -17,6 +31,16 @@ const AP_Param::Info Plane::var_info[] = {
     // @Description: This value is incremented when changes are made to the eeprom format
     // @User: Advanced
     GSCALAR(format_version,         "FORMAT_VERSION", 0),
+
+    GSCALAR(fly_odometer_km,         "FLY_ODOMETER_KM",   0),
+
+    GSCALAR(fly_odometer_m,          "FLY_ODOMETER_M",   0),
+
+    GSCALAR(fly_time_hour,           "FLY_TIME_HOUR",   0),
+
+    GSCALAR(fly_time_minute,         "FLY_TIME_MINUTE",     0),
+
+    GSCALAR(fly_time_second,         "FLY_TIME_SECOND",     0),
 
     // @Param: SYSID_SW_TYPE
     // @DisplayName: Software Type
@@ -285,6 +309,13 @@ const AP_Param::Info Plane::var_info[] = {
     // @User: Standard
     ASCALAR(loiter_radius,          "WP_LOITER_RAD",  LOITER_RADIUS_DEFAULT),
 
+    ASCALAR(track_heading_ki,       "TRACK_NOGPS_I", 0.01),
+    ASCALAR(track_heading_kp,       "TRACK_NOGPS_P", 0.5),
+    ASCALAR(track_time_gain,        "TRACK_TIME_G", 1.0),
+    ASCALAR(track_cirle_gain,       "TRACK_CIRLE_G", 0.5),
+    ASCALAR(track_Acceptable_angle, "TRACK_ACC_ANG", 20),
+    ASCALAR(track_radius_gain,      "TRACK_R_GAIN", 1.4),
+
     // @Param: RTL_RADIUS
     // @DisplayName: RTL loiter radius
     // @Description: Defines the radius of the loiter circle when in RTL mode. If this is zero then WP_LOITER_RAD is used. If the radius is negative then a counter-clockwise is used. If positive then a clockwise loiter is used.
@@ -526,7 +557,7 @@ const AP_Param::Info Plane::var_info[] = {
     // @Description: The action to take on a long (FS_LONG_TIMEOUT seconds) failsafe event. If the aircraft was in a stabilization or manual mode when failsafe started and a long failsafe occurs then it will change to RTL mode if FS_LONG_ACTN is 0 or 1, and will change to FBWA if FS_LONG_ACTN is set to 2. If the aircraft was in an auto mode (such as AUTO or GUIDED) when the failsafe started then it will continue in the auto mode if FS_LONG_ACTN is set to 0, will change to RTL mode if FS_LONG_ACTN is set to 1 and will change to FBWA mode if FS_LONG_ACTN is set to 2. If FS_LONG_ACTION is set to 3, the parachute will be deployed (make sure the chute is configured and enabled). 
     // @Values: 0:Continue,1:ReturnToLaunch,2:Glide,3:Deploy Parachute
     // @User: Standard
-    GSCALAR(long_fs_action,         "FS_LONG_ACTN",   0),
+    GSCALAR(long_fs_action,         "FS_LONG_ACTN",   1),
 
     // @Param: FS_LONG_TIMEOUT
     // @DisplayName: Long failsafe timeout
@@ -552,6 +583,32 @@ const AP_Param::Info Plane::var_info[] = {
     // @Increment: 50
     // @User: Standard
     GSCALAR(fs_batt_mah,            "FS_BATT_MAH", 0),
+
+    // @Param: FS_BATT_VOLTAGE2
+    // @DisplayName: Failsafe battery voltage
+    // @Description: Battery voltage to trigger failsafe. Set to 0 to disable battery voltage failsafe. If the battery voltage drops below this voltage continuously for 10 seconds then the plane will switch to RTL mode.
+    // @Units: V
+    // @Increment: 0.1
+    // @User: Standard
+    GSCALAR(fs_batt_voltage2,        "FS_BATT_VOLTAGE2", 0),
+
+    // @Param: FS_BATT_MAH2
+    // @DisplayName: Failsafe battery milliAmpHours
+    // @Description: Battery capacity remaining to trigger failsafe. Set to 0 to disable battery remaining failsafe. If the battery remaining drops below this level then the plane will switch to RTL mode immediately.
+    // @Units: mA.h
+    // @Increment: 50
+    // @User: Standard
+    GSCALAR(fs_batt_mah2,            "FS_BATT_MAH2", 0),
+
+    GSCALAR(fs_event_timeout,            "FS_EVENT_TIMEOUT", 2000),
+    GSCALAR(fs_event_hight_m,            "FS_EVENT_HIGHT", 30),
+    GSCALAR(fs_event_hight_land,         "FS_EHIGHT_LAND", 50),
+    GSCALAR(disarm_hight,                "DISARM_HIGHT", 50),
+    GSCALAR(fs_assisted_timeout,         "FS_ASSIS_TIMEOUT", 5000),
+    GSCALAR(fifth_rtl_limit_hight,       "RTL_LIMIT_HIGHT", 10),
+    GSCALAR(fs_distance_to_home,         "FS_DISTANCE_HOME",10000),
+	GSCALAR(fs_lost_gps_ms,              "FS_LOST_GPS_MS", 2000),
+    GSCALAR(fs_nogps_rtl_sink_rate,      "FS_NOGPS_SINK", 100),
 
     // @Param: FS_GCS_ENABL
     // @DisplayName: GCS failsafe enable
@@ -782,7 +839,7 @@ const AP_Param::Info Plane::var_info[] = {
     // @Description: Return to launch target altitude. This is the relative altitude the plane will aim for and loiter at when returning home. If this is negative (usually -1) then the plane will use the current altitude at the time of entering RTL. Note that when transiting to a Rally Point the altitude of the Rally Point is used instead of ALT_HOLD_RTL.
     // @Units: cm
     // @User: User
-    GSCALAR(RTL_altitude_cm,        "ALT_HOLD_RTL",   ALT_HOLD_HOME_CM),
+    GSCALAR(RTL_altitude_cm,        "ALT_HOLD_RTL",   -1),
 
     // @Param: ALT_HOLD_FBWCM
     // @DisplayName: Minimum altitude for FBWB mode
@@ -1269,6 +1326,10 @@ void Plane::load_parameters(void)
         cliSerial->printf("Bad parameter table\n");
         AP_HAL::panic("Bad parameter table");
     }
+
+    load_param_flag = LOAD_PARAM_OK;
+
+#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
     if (!g.format_version.load() ||
         g.format_version != Parameters::k_format_version) {
 
@@ -1280,6 +1341,31 @@ void Plane::load_parameters(void)
         g.format_version.set_and_save(Parameters::k_format_version);
         cliSerial->printf("done.\n");
     }
+#else
+    int ret;
+    struct stat st;
+
+	ret = stat("/fs/microsd/UAVRS/WRITEPARAM", &st);
+    if (ret == OK) {
+
+        // erase all parameters
+        printf("Firmware change: erasing EEPROM...\n");
+        AP_Param::erase_all();
+        // save the current format version
+        g.format_version.set_and_save(Parameters::k_format_version);
+        printf("done.\n");
+    }
+
+    if(!g.format_version.load()){
+        load_param_flag = LOAD_PARAM_FAILED;
+        return;
+    }
+
+    if(g.format_version != Parameters::k_format_version){
+        load_param_flag = PARAM_VERSION_ERR;
+        return;
+    }
+#endif
 
     uint32_t before = micros();
     // Load all auto-loaded EEPROM variables

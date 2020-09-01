@@ -260,7 +260,7 @@ uint16_t Plane::create_mixer(char *buf, uint16_t buf_size, const char *filename)
  */
 bool Plane::setup_failsafe_mixing(void)
 {
-    const char *mixer_filename = "/fs/microsd/APM/MIXER.MIX";
+    const char *mixer_filename = "/fs/microsd/UAVRS/MIXER.MIX";
     bool ret = false;
     char *buf = nullptr;
     const uint16_t buf_size = 2048;

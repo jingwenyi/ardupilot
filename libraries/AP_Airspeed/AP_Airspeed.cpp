@@ -29,6 +29,9 @@
 #include "AP_Airspeed_MS5525.h"
 #include "AP_Airspeed_SDP3X.h"
 #include "AP_Airspeed_analog.h"
+#if HAL_WITH_UAVCAN
+#include "AP_Airspeed_UAVCAN_MS4525.h"
+#endif
 #include "AP_Airspeed_Backend.h"
 
 extern const AP_HAL::HAL &hal;
@@ -37,8 +40,8 @@ extern const AP_HAL::HAL &hal;
  #define ARSPD_DEFAULT_TYPE TYPE_ANALOG
  #define ARSPD_DEFAULT_PIN 1
 #else
- #define ARSPD_DEFAULT_TYPE TYPE_I2C_MS4525
- #define ARSPD_DEFAULT_PIN 15
+ #define ARSPD_DEFAULT_TYPE TYPE_UAVCAN_MS4525
+ #define ARSPD_DEFAULT_PIN 65
 #endif
 
 #if CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_DISCO
@@ -55,7 +58,7 @@ const AP_Param::GroupInfo AP_Airspeed::var_info[] = {
     // @Param: _TYPE
     // @DisplayName: Airspeed type
     // @Description: Type of airspeed sensor
-    // @Values: 0:None,1:I2C-MS4525D0,2:Analog,3:I2C-MS5525,4:I2C-MS5525 (0x76),5:I2C-MS5525 (0x77),6:I2C-SDP3X
+    // @Values: 0:None,1:I2C-MS4525D0,2:Analog,3:I2C-MS5525,4:I2C-MS5525 (0x76),5:I2C-MS5525 (0x77),6:I2C-SDP3X,7:UAVCAN-MS4525
     // @User: Standard
     AP_GROUPINFO_FLAGS("_TYPE", 0, AP_Airspeed, param[0].type, ARSPD_DEFAULT_TYPE, AP_PARAM_FLAG_ENABLE),
 
@@ -243,6 +246,13 @@ void AP_Airspeed::init()
             break;
         case TYPE_I2C_SDP3X:
             sensor[i] = new AP_Airspeed_SDP3X(*this, i);
+            break;
+#if HAL_WITH_UAVCAN
+		case TYPE_UAVCAN_MS4525:
+			sensor[i] = new AP_Airspeed_UAVCAN_MS4525(*this, i);
+			break;
+#endif
+        default:
             break;
         }
         if (sensor[i] && !sensor[i]->init()) {

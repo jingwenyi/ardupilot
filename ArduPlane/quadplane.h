@@ -46,6 +46,10 @@ public:
         return initialised;
     }
 
+    void set_emergency_flag(bool status){
+        emergency_need_assistance = status;
+    }
+
     // is quadplane assisting?
     bool in_assisted_flight(void) const {
         return available() && assisted_flight;
@@ -108,6 +112,9 @@ public:
     
     // user initiated takeoff for guided mode
     bool do_user_takeoff(float takeoff_altitude);
+
+    //check if quadplane assisted flight or not
+    bool quadplane_assisted_flight(void) const;
     
     struct PACKED log_QControl_Tuning {
         LOG_PACKET_HEADER;
@@ -194,6 +201,8 @@ private:
     void init_loiter(void);
     void init_land(void);
     void control_loiter(void);
+    void get_pilot_desired_lean_angles(float roll_in, float pitch_in, float &roll_out, float &pitch_out, float angle_max);
+    void nogps_land_run();
     void check_land_complete(void);
 
     void init_qrtl(void);
@@ -294,6 +303,8 @@ private:
     } weathervane;
     
     bool initialised;
+
+    bool emergency_need_assistance;
     
     // timer start for transition
     uint32_t transition_start_ms;

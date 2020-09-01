@@ -266,6 +266,11 @@ void NavEKF2_core::SelectVelPosFusion()
         fusePosData = false;
     }
 
+    // use gps heading for yaw
+    if(gpsDataToFuse){
+        FuseGpsHeading();
+    }
+
     // we have GPS data to fuse and a request to align the yaw using the GPS course
     if (gpsYawResetRequest) {
         realignYawGPS();
@@ -304,27 +309,24 @@ void NavEKF2_core::SelectVelPosFusion()
         // store the time of the reset
         lastPosReset_ms = imuSampleTime_ms;
 
-        // If we are alseo using GPS as the height reference, reset the height
-        if (activeHgtSource == HGT_SOURCE_GPS) {
-            // Store the position before the reset so that we can record the reset delta
-            posResetD = stateStruct.position.z;
+        // Store the position before the reset so that we can record the reset delta
+        posResetD = stateStruct.position.z;
 
-            // write to the state vector
-            stateStruct.position.z = -hgtMea;
+        // write to the state vector
+        stateStruct.position.z = -hgtMea;
 
-            // Calculate the position jump due to the reset
-            posResetD = stateStruct.position.z - posResetD;
+        // Calculate the position jump due to the reset
+        posResetD = stateStruct.position.z - posResetD;
 
-            // Add the offset to the output observer states
-            outputDataNew.position.z += posResetD;
-            outputDataDelayed.position.z += posResetD;
-            for (uint8_t i=0; i<imu_buffer_length; i++) {
-                storedOutput[i].position.z += posResetD;
-            }
-
-            // store the time of the reset
-            lastPosResetD_ms = imuSampleTime_ms;
+        // Add the offset to the output observer states
+        outputDataNew.position.z += posResetD;
+        outputDataDelayed.position.z += posResetD;
+        for (uint8_t i=0; i<imu_buffer_length; i++) {
+            storedOutput[i].position.z += posResetD;
         }
+
+        // store the time of the reset
+        lastPosResetD_ms = imuSampleTime_ms;
     }
 
     // If we are operating without any aiding, fuse in the last known position
@@ -791,7 +793,11 @@ void NavEKF2_core::selectHeightForFusion()
                 activeHgtSource = HGT_SOURCE_RNG;
             }
         }
-    } else if ((frontend->_altSource == 2) && ((imuSampleTime_ms - lastTimeGpsReceived_ms) < 500) && validOrigin && gpsAccuracyGood) {
+    } else if ((frontend->_altSource == 2)
+        && ((imuSampleTime_ms - lastTimeGpsReceived_ms) < 500)
+        && validOrigin
+        && gpsAccuracyGood
+        && gpsDataDelayed.stat == AP_GPS::GPS_OK_FIX_3D_RTK_FIXED) {
         activeHgtSource = HGT_SOURCE_GPS;
     } else if ((frontend->_altSource == 3) && validOrigin && rngBcnGoodToAlign) {
         activeHgtSource = HGT_SOURCE_BCN;

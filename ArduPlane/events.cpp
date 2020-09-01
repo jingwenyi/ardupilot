@@ -103,8 +103,24 @@ void Plane::failsafe_long_on_event(enum failsafe_state fstype, mode_reason_t rea
 #endif
         } else if (g.long_fs_action == 2) {
             set_mode(FLY_BY_WIRE_A, reason);
-        } else if (g.long_fs_action == 1) {
-            set_mode(RTL, reason);
+        } else if (g.long_fs_action == 1 && !emergency_return) {
+            //set_mode(RTL, reason);
+            if(control_mode == GUIDED && mission.starts_check_misson_cmd()){
+                set_mode(AUTO, reason);
+            }
+
+            if(control_mode == AUTO && mission.starts_check_misson_cmd()){
+                if(mission.get_current_nav_index() < mission.num_commands() - 9){
+                    uint16_t seq = mission.num_commands() - 9;
+                    camera.set_trigger_distance(0);
+                    mission.set_current_cmd(seq);
+                }
+            }else{
+                set_mode(RTL, reason);
+            }
+
+            event_report = PLANE_EVENT_REPORT_RC_GCS_LOSE;
+            gcs().send_message(MSG_EVENT_REPORT);
         }
         break;
 
@@ -136,18 +152,78 @@ void Plane::failsafe_short_off_event(mode_reason_t reason)
 
 void Plane::low_battery_event(void)
 {
-    if (failsafe.low_battery) {
+    if (failsafe.low_battery || emergency_return || flight_stage !=AP_Vehicle::FixedWing::FLIGHT_NORMAL) {
+        if(emergency_return){
+            failsafe.low_battery = true;
+            AP_Notify::flags.failsafe_battery = true;
+        }
         return;
     }
-    gcs().send_text(MAV_SEVERITY_WARNING, "Low battery %.2fV used %.0f mAh",
+    gcs().send_text(MAV_SEVERITY_WARNING, "one-level Low battery %.2fV used %.0f mAh",
                       (double)battery.voltage(), (double)battery.current_total_mah());
-    if (flight_stage != AP_Vehicle::FixedWing::FLIGHT_LAND) {
-    	set_mode(RTL, MODE_REASON_BATTERY_FAILSAFE);
-    	aparm.throttle_cruise.load();
+
+    //Return to emergency point
+    if(control_mode == GUIDED && mission.starts_check_misson_cmd() && arming.is_armed()){
+        set_mode(AUTO, MODE_REASON_BATTERY_FAILSAFE);
     }
+
+    if(control_mode == AUTO && arming.is_armed() && mission.starts_check_misson_cmd()){
+        camera.set_trigger_distance(0);
+        if(mission.get_current_nav_index() <= 2){
+            uint16_t seq = mission.num_commands() - 7;
+            mission.set_current_cmd(seq);
+        }else if(mission.get_current_nav_index() < mission.num_commands() - 9){
+            uint16_t seq = mission.num_commands() - 9;
+            mission.set_current_cmd(seq);
+        }
+    }else if(control_mode != NO_GPS_RTL){
+        set_mode(RTL, MODE_REASON_BATTERY_FAILSAFE);
+    }
+
+    event_report = PLANE_EVENT_REPORT_LOW_BATT_ONE;
+    gcs().send_message(MSG_EVENT_REPORT);
+
     failsafe.low_battery = true;
     AP_Notify::flags.failsafe_battery = true;
 }
+
+void Plane::low_battery_event2(void)
+{
+    if (failsafe.low_battery2 || emergency_return || flight_stage !=AP_Vehicle::FixedWing::FLIGHT_NORMAL) {
+        if(emergency_return){
+            failsafe.low_battery2 = true;
+            AP_Notify::flags.failsafe_battery = true;
+        }
+        return;
+    }
+    gcs().send_text(MAV_SEVERITY_WARNING, "two-levelLow battery %.2fV used %.0f mAh",
+                      (double)battery.voltage(), (double)battery.current_total_mah());
+
+    
+    //Return to emergency point
+    if(control_mode == GUIDED && mission.starts_check_misson_cmd() && arming.is_armed()){
+        set_mode(AUTO, MODE_REASON_BATTERY_FAILSAFE);
+    }
+
+    if(control_mode == AUTO && arming.is_armed() && mission.starts_check_misson_cmd()){
+        if(mission.get_current_nav_index() < mission.num_commands() - 6){
+            camera.set_trigger_distance(0);
+            uint16_t seq = mission.num_commands() - 6;
+            mission.set_current_cmd(seq);
+        }
+    }else if(control_mode != NO_GPS_RTL){
+        set_mode(RTL, MODE_REASON_BATTERY_FAILSAFE);
+    }
+
+	emergency_return = true;
+    
+    event_report = PLANE_EVENT_REPORT_LOW_BATT_TWO;
+    gcs().send_message(MSG_EVENT_REPORT);
+
+    failsafe.low_battery2 = true;
+    AP_Notify::flags.failsafe_battery = true;
+}
+
 
 void Plane::update_events(void)
 {

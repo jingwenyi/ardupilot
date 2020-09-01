@@ -63,6 +63,9 @@ void AP_BoardConfig::px4_setup_pwm()
 #if CONFIG_HAL_BOARD == HAL_BOARD_VRBRAIN
         { 8, PWM_SERVO_MODE_12PWM, 0 },
 #endif
+#if defined(CONFIG_ARCH_BOARD_UAVRS_V1)
+        { 8, PWM_SERVO_MODE_12PWM, 0 },
+#endif
     };
     uint8_t mode_parm = (uint8_t)px4.pwm_count.get();
     uint8_t i;
@@ -268,6 +271,7 @@ void AP_BoardConfig::px4_setup_drivers(void)
     case PX4_BOARD_PH2SLIM:
     case PX4_BOARD_AEROFC:
     case PX4_BOARD_PIXHAWK_PRO:
+	case PX4_BOARD_UAVRS:
         break;
     default:
         sensor_config_error("Unknown board type");
@@ -290,6 +294,7 @@ void AP_BoardConfig::px4_setup_px4io(void)
 {
     if (px4_start_driver(px4io_main, "px4io", "start norc")) {
         printf("px4io started OK\n");
+        px4_tone_alarm("MBABGP");
     } else {
         // might be in bootloader mode if user held down safety switch
         // at power on
@@ -505,6 +510,10 @@ void AP_BoardConfig::px4_autodetect(void)
 #elif defined(CONFIG_ARCH_BOARD_AEROFC_V1)
     px4.board_type.set_and_notify(PX4_BOARD_AEROFC);
     hal.console->printf("Detected Aero FC\n");
+#elif defined(CONFIG_ARCH_BOARD_UAVRS_V1)
+    // UAVRS has ADIS16375 and xxx on external bus
+    px4.board_type.set_and_notify(PX4_BOARD_UAVRS);
+    hal.console->printf("Detected UAVRS\n");
 #endif
 
 }

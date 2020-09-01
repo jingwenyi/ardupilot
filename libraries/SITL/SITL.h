@@ -64,6 +64,8 @@ public:
     // true when motors are active
     bool motors_on;
 
+    bool is_arming;
+
     // height above ground
     float height_agl;
     
